@@ -63,11 +63,11 @@ class Test_ND_arrays(Readable):
                             ArrayOf(
                                 members=ArrayOf(
                                     members=IntRange(minval=0,maxval=100),
-                                    minlen=0,
+                                    minlen=5,
                                     maxlen=5),
-                                minlen=0,
+                                minlen=5,
                                 maxlen=5),
-                            minlen=0,
+                            minlen=5,
                             maxlen=5)                                    
                         ,
                         readonly = False)
