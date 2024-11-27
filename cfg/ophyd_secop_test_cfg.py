@@ -51,7 +51,12 @@ Mod('nd_arr',
 
 )
 
-
+Mod(
+    'primitive_arrays',
+    'frappy_HZB.ophyd_secop_test_modules.OPHYD_test_primitive_arrays',
+    'simulated hardware for testing handling of arays of primitives',
+    value = 10.3
+)
 
 
 

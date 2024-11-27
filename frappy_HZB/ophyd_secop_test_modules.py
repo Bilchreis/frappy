@@ -124,8 +124,41 @@ class Test_Struct_of_arrays(Readable):
     def write_writable_strct_of_arr(self,val):
         self.writable_strct_of_arr = val
         
-        
+class OPHYD_test_primitive_arrays(Readable):
+    
+    value = Parameter('struct Value',
+                      datatype=FloatRange(),
+                      default = 1.0,
+                      readonly= True)
+    arr_int = Parameter('array of ints',
+                        ArrayOf(IntRange(),0,10),
+                        readonly = True,
+                        default = [1,2,4,5,6,7])
+    
+    arr_float = Parameter('array of floats',
+                        ArrayOf(FloatRange(),0,10),
+                        readonly = True,
+                        default = [1.2,1.4])
 
+    arr_arr_float = Parameter('array of floats',
+                        ArrayOf(ArrayOf(FloatRange(),0,10),0,10),
+                        readonly = True,
+                        default = [[2.3,2.4],[1.2,1.4]])
+    
+    arr_bool = Parameter('array of floats',
+                    ArrayOf(BoolType(),0,10),
+                    readonly = True,
+                    default = [True,False,True])
+    
+    arr_String = Parameter('array of Strings',
+                ArrayOf(StringType(maxchars=20),0,10),
+                readonly = True,
+                default = ["abdf","sds","ass"])
+
+    arr_String_nomax = Parameter('array of Strings',
+                    ArrayOf(StringType(),0,10),
+                    readonly = True,
+                    default = ["abdfefcsdcsdcsdcsdcsdcsdcsdc","sds","ass"])
 
 class OPYD_test_struct(Drivable):
     Status = Enum(Drivable.Status)  #: status codes
