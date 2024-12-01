@@ -25,7 +25,7 @@
 IDENTREQUEST = '*IDN?'  # literal
 # literal! first part is fixed!
 IDENTPREFIX = 'ISSE&SINE2020,SECoP,'
-IDENTREPLY = IDENTPREFIX + 'V2019-08-20,v1.0 RC2'
+IDENTREPLY = IDENTPREFIX + 'V2019-09-16,v1.0'
 
 DESCRIPTIONREQUEST = 'describe'  # literal
 DESCRIPTIONREPLY = 'describing'  # +<id> +json
@@ -44,11 +44,6 @@ COMMANDREPLY = 'done'
 WRITEREQUEST = 'change'
 # +module[:parameter] +json_value # send with the read back value
 WRITEREPLY = 'changed'
-
-# +module[:parameter] +json_value
-BUFFERREQUEST = 'buffer'
-# +module[:parameter] +json_value # send with the read back value
-BUFFERREPLY = 'buffered'
 
 # +module[:parameter] -> NO direct reply, calls POLL internally!
 READREQUEST = 'read'
@@ -79,7 +74,6 @@ REQUEST2REPLY = {
     DISABLEEVENTSREQUEST: DISABLEEVENTSREPLY,
     COMMANDREQUEST:       COMMANDREPLY,
     WRITEREQUEST:         WRITEREPLY,
-    BUFFERREQUEST:        BUFFERREPLY,
     READREQUEST:          READREPLY,
     HEARTBEATREQUEST:     HEARTBEATREPLY,
     HELPREQUEST:          HELPREPLY,

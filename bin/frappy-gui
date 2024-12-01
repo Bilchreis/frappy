@@ -26,10 +26,10 @@ from __future__ import print_function
 
 import sys
 import argparse
-from os import path
+from pathlib import Path
 
 # Add import path for inplace usage
-sys.path.insert(0, path.abspath(path.join(path.dirname(__file__), '..')))
+sys.path.insert(0, str(Path(__file__).absolute().parents[1]))
 
 import logging
 from mlzlog import ColoredConsoleHandler
@@ -64,9 +64,10 @@ def main(argv=None):
     loglevel = logging.DEBUG if args.debug else (logging.ERROR if args.quiet else logging.INFO)
     logger = logging.getLogger('gui')
     logger.setLevel(logging.DEBUG)
-    console = ColoredConsoleHandler()
-    console.setLevel(loglevel)
-    logger.addHandler(console)
+    if sys.stdout is not None:
+        console = ColoredConsoleHandler()
+        console.setLevel(loglevel)
+        logger.addHandler(console)
 
     app = QApplication(argv)
 

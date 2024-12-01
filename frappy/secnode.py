@@ -25,6 +25,7 @@ from collections import OrderedDict
 from frappy.dynamic import Pinata
 from frappy.errors import ConfigError, NoSuchModuleError, NoSuchParameterError
 from frappy.lib import get_class
+from frappy.version import get_version
 
 
 class SecNode:
@@ -35,11 +36,10 @@ class SecNode:
      - get_module(modulename) returns the requested module or None if there is
        no suitable configuration on the server
     """
+
     def __init__(self, name, logger, options, srv):
         self.equipment_id = options.pop('equipment_id', name)
         self.nodeprops = {}
-        for k in list(options):
-            self.nodeprops[k] = options.pop(k)
         # map ALL modulename -> moduleobj
         self.modules = {}
         # list of EXPORTED modules
@@ -52,6 +52,18 @@ class SecNode:
         self.errors = []
         self.traceback_counter = 0
         self.name = name
+
+    def add_secnode_property(self, prop, value):
+        """Add SECNode property. If starting with an underscore, it is exported
+        in the description."""
+        self.nodeprops[prop] = value
+
+    def get_secnode_property(self, prop):
+        """Get SECNode property.
+
+        Returns None if not present.
+        """
+        return self.nodeprops.get(prop)
 
     def get_module(self, modulename):
         """ Returns a fully initialized module. Or None, if something went
@@ -216,9 +228,11 @@ class SecNode:
                                            f'has no parameter {pname!r}')
         elif not modname or modname == '.':
             result['equipment_id'] = self.equipment_id
-            result['firmware'] = 'FRAPPY - The Python Framework for SECoP'
-            result['version'] = '2021.02'
-            result.update(self.nodeprops)
+            result['firmware'] = 'FRAPPY ' + get_version()
+            result['description'] = self.nodeprops['description']
+            for prop, propvalue in self.nodeprops.items():
+                if prop.startswith('_'):
+                    result[prop] = propvalue
         else:
             raise NoSuchModuleError(f'Module {modname!r} does not exist')
         return result

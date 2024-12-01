@@ -1,3 +1,133 @@
+frappy-core (0.20.4) jammy; urgency=medium
+
+  [ Georg Brandl ]
+  * remove unused file
+
+  [ Markus Zolliker ]
+  * frappy.lib.multievent: avoid deadlock
+
+  [ Jens Krüger ]
+  * PSI: Fix import error on ThermoFisher module
+
+  [ Markus Zolliker ]
+  * frappy.client: catch all errors in handleError callback
+
+  [ Jens Krüger ]
+  * Lib/config: Create a list of pathes only for confdir
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Thu, 14 Nov 2024 14:43:54 +0100
+
+frappy-core (0.20.3) jammy; urgency=medium
+
+  [ Georg Brandl ]
+  * fixup test for cfg_editor utils to run from non-checkout, and fix names, and remove example code
+
+  [ Alexander Zaft ]
+  * add generalConfig to etc
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Thu, 07 Nov 2024 10:57:11 +0100
+
+frappy-core (0.20.2) jammy; urgency=medium
+
+  [ Georg Brandl ]
+  * pylint: do not try to infer too much
+
+  [ Alexander Zaft ]
+  * test_server: basic description checks
+  * simulation: fix extra_params default, ccidu1 cfg
+  * sim: make amagnet sim cfg startable again
+  * server: fix positional argument lint
+  * server: show interfaces as custom property
+  * core: fix Dispatcher and SECNode opts handling
+
+  [ Markus Zolliker ]
+  * frappy_psi.sea: bugfix: revert change of updateEvent to udpateItem
+  * fix playground
+
+  [ Alexander Zaft ]
+  * config: allow using Prop(...)
+  * config: fix typo
+  * Revert "config: allow using Prop(...)"
+  * generalconfig: streamlined config discovery
+
+  [ Markus Zolliker ]
+  * better order of accessibles: 'value' 'status' and 'target' first
+
+  [ Alexander Zaft ]
+  * server: fix windows ctrl-c
+
+  [ Georg Brandl ]
+  * systemd: enable indication of reloading/stopping
+
+  [ Alexander Zaft ]
+  * server: service discovery over UDP.
+
+  [ Markus Zolliker ]
+  * generalConfig: fix the case when confdir is a list of paths
+
+  [ Georg Brandl ]
+  * server: better handling of cfgfile argument
+
+  [ Alexander Zaft ]
+  * fix frappy-server cfgfiles command
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Wed, 06 Nov 2024 10:40:26 +0100
+
+frappy-core (0.20.1) jammy; urgency=medium
+
+  * gui: do not add a console logger when there is no sys.stdout
+  * remove unused test class
+  * remove old unused parse module
+  * remove sim-server
+  * lib: there might be no confdir in "cfg"
+
+ -- Georg Brandl <jenkins@frm2.tum.de>  Thu, 17 Oct 2024 16:31:27 +0200
+
+frappy-core (0.20.0) jammy; urgency=medium
+
+  [ Alexander Zaft ]
+  * bin: remove make_doc
+
+  [ Markus Zolliker ]
+  * GUI: avoid space needed for closed groups
+  * GUI: allow enums to be plotted
+
+  [ Alexander Zaft ]
+  * all: start using pathlib
+  * generalConfig, config: use pathlib
+  * psi: change open calls in sea
+
+  [ Georg Brandl ]
+  * fix descriptive data
+
+  [ Markus Zolliker ]
+  * frappy_psi.sea: avoid error on import
+
+  [ Enrico Faulhaber ]
+  * ci: also install gui requirements for additional tests
+
+  [ Georg Brandl ]
+  * remove old "buffer" message
+  * ci/Dockerfile: do no use pytango from upstream
+  * new setuptools needs new importlib_metadata
+  * install pytango for testing
+  * install libgl1 for pyqt6
+
+  [ Enrico Faulhaber ]
+  * add test for importing custom modules
+
+  [ Markus Zolliker ]
+  * do not fail when generalConfig.init() is called twice
+  * add Datatype.to_string as counterpart of .from_string
+  * add more datatype tests
+
+  [ Georg Brandl ]
+  * update declared version to 1.0 final
+  * setup: fix classifiers
+  * setup: fill long_description and url
+
+ -- Alexander Zaft <jenkins@frm2.tum.de>  Thu, 17 Oct 2024 14:24:29 +0200
+
 frappy-core (0.19.10) jammy; urgency=medium
 
   [ Alexander Zaft ]

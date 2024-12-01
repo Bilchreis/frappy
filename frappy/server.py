@@ -26,6 +26,7 @@ import os
 import signal
 import sys
 import threading
+import time
 
 import mlzlog
 
@@ -36,6 +37,7 @@ from frappy.lib.multievent import MultiEvent
 from frappy.logging import init_remote_logging
 from frappy.params import PREDEFINED_ACCESSIBLES
 from frappy.secnode import SecNode
+from frappy.protocol.discovery import UDPListener
 
 try:
     from daemon import DaemonContext
@@ -60,16 +62,16 @@ class Server:
     }
     _restart = True
 
-    def __init__(self, name, parent_logger, cfgfiles=None, interface=None, testonly=False):
+    def __init__(self, name, parent_logger, *, cfgfiles=None, interface=None, testonly=False):
         """initialize server
 
         Arguments:
         - name:  the node name
         - parent_logger: the logger to inherit from. a handler is installed by
             the server to provide remote logging
-        - cfgfiles: if not given, defaults to name
-            may be a comma separated list of cfg files
-            items ending with .cfg are taken as paths, else .cfg is appended and
+        - cfgfiles: if not given, defaults to [name]
+            may be a list of cfg files
+            items ending with .py are taken as paths, else _cfg.py is appended and
             files are looked up in the config path retrieved from the general config
         - interface: an uri of the from tcp://<port> or a bare port number for tcp
             if not given, the interface is taken from the config file. In case of
@@ -93,9 +95,9 @@ class Server:
         self._testonly = testonly
 
         if not cfgfiles:
-            cfgfiles = name
+            cfgfiles = [name]
         # sanitize name (in case it is a cfgfile)
-        name = os.path.splitext(os.path.basename(name))[0]
+        self.name = name = os.path.splitext(os.path.basename(name))[0]
         if isinstance(parent_logger, mlzlog.MLZLogger):
             self.log = parent_logger.getChild(name, True)
         else:
@@ -112,9 +114,11 @@ class Server:
             raise ConfigError('No interface specified in configuration or arguments!')
 
         self._cfgfiles = cfgfiles
-        self._pidfile = os.path.join(generalConfig.piddir, name + '.pid')
+        self._pidfile = generalConfig.piddir / (name + '.pid')
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+
+        self.discovery = None
 
     def signal_handler(self, num, frame):
         if hasattr(self, 'interfaces') and self.interfaces:
@@ -127,9 +131,9 @@ class Server:
     def start(self):
         if not DaemonContext:
             raise ConfigError('can not daemonize, as python-daemon is not installed')
-        piddir = os.path.dirname(self._pidfile)
-        if not os.path.isdir(piddir):
-            os.makedirs(piddir)
+        piddir = self._pidfile.parent
+        if not piddir.is_dir():
+            piddir.mkdir(parents=True)
         pidfile = pidlockfile.TimeoutPIDLockFile(self._pidfile)
 
         if pidfile.is_locked():
@@ -164,6 +168,7 @@ class Server:
                 print(formatException(verbose=True))
                 raise
 
+            # client interfaces
             self.interfaces = {}
             iface_threads = []
             # default_timeout 12 sec: TCPServer might need up to 10 sec to wait for Address no longer in use
@@ -171,17 +176,18 @@ class Server:
             lock = threading.Lock()
             failed = {}
             interfaces = [self.node_cfg['interface']] + self.node_cfg.get('secondary', [])
-            # TODO: check if only one interface of each type is open?
-            for interface in interfaces:
-                opts = {'uri': interface}
-                t = mkthread(
-                    self._interfaceThread,
-                    opts,
-                    lock,
-                    failed,
-                    interfaces_started.get_trigger(),
-                )
-                iface_threads.append(t)
+            with lock:
+                for interface in interfaces:
+                    opts = {'uri': interface}
+                    t = mkthread(
+                        self._interfaceThread,
+                        opts,
+                        lock,
+                        failed,
+                        interfaces,
+                        interfaces_started.get_trigger(),
+                    )
+                    iface_threads.append(t)
             if not interfaces_started.wait():
                 for iface in interfaces:
                     if iface not in failed and iface not in self.interfaces:
@@ -192,14 +198,33 @@ class Server:
             if not self.interfaces:
                 self.log.error('no interface started')
                 return
-            self.log.info('startup done with interface(s) %s' % ', '.join(self.interfaces))
+            self.secnode.add_secnode_property('_interfaces', list(self.interfaces))
+            self.log.info('startup done with interface(s) %s',
+                          ', '.join(self.interfaces))
+
+            # start discovery interface when we know where we listen
+            self.discovery = UDPListener(
+                self.secnode.equipment_id,
+                self.secnode.get_secnode_property('description'),
+                list(self.interfaces),
+                self.log.getChild('discovery')
+            )
+            mkthread(self.discovery.run)
+
             if systemd:
                 systemd.daemon.notify("READY=1\nSTATUS=accepting requests")
 
-            # we wait here on the thread finishing, which means we got a
-            # signal to shut down or an exception was raised
-            for t in iface_threads:
-                t.join()
+            if os.name == 'nt':
+                # workaround: thread.join() on Windows blocks and is not
+                # interruptible by the signal handler, so loop and check
+                # periodically whether the interfaces are still running.
+                while True:
+                    time.sleep(1)
+                    if not interfaces:
+                        break
+            else:
+                for t in iface_threads:
+                    t.join()
 
             while failed:
                 iface, err = failed.popitem()
@@ -207,11 +232,11 @@ class Server:
 
             self.log.info('stopped listening, cleaning up %d modules',
                           len(self.secnode.modules))
-            # if systemd:
-            #     if self._restart:
-            #         systemd.daemon.notify('RELOADING=1')
-            #     else:
-            #         systemd.daemon.notify('STOPPING=1')
+            if systemd:
+                if self._restart:
+                    systemd.daemon.notify('RELOADING=1')
+                else:
+                    systemd.daemon.notify('STOPPING=1')
             self.secnode.shutdown_modules()
             if self._restart:
                 self.restart_hook()
@@ -226,10 +251,12 @@ class Server:
 
     def shutdown(self):
         self._restart = False
+        if self.discovery:
+            self.discovery.shutdown()
         for iface in self.interfaces.values():
             iface.shutdown()
 
-    def _interfaceThread(self, opts, lock, failed, start_cb):
+    def _interfaceThread(self, opts, lock, failed, interfaces, start_cb):
         iface = opts['uri']
         scheme, _, _ = iface.rpartition('://')
         scheme = scheme or 'tcp'
@@ -246,9 +273,12 @@ class Server:
         except Exception as e:
             with lock:
                 failed[iface] = e
-            start_cb()
-            return
-        self.log.info(f'stopped {iface}')
+                interfaces.remove(iface)
+            start_cb()  # callback should also be called on failure
+        else:
+            with lock:
+                interfaces.remove(iface)
+            self.log.info(f'stopped {iface}')
 
     def _processCfg(self):
         """Processes the module configuration.
@@ -262,13 +292,13 @@ class Server:
         errors = []
         opts = dict(self.node_cfg)
         cls = get_class(opts.pop('cls'))
-        name = opts.pop('name', self._cfgfiles)
-        # TODO: opts not in both
-        self.secnode = SecNode(name, self.log.getChild('secnode'), opts, self)
-        self.dispatcher = cls(name, self.log.getChild('dispatcher'), opts, self)
+        self.secnode = SecNode(self.name, self.log.getChild('secnode'), opts, self)
+        self.dispatcher = cls(self.name, self.log.getChild('dispatcher'), opts, self)
 
-        if opts:
-            self.secnode.errors.append(self.unknown_options(cls, opts))
+        # add other options as SECNode properties, those with '_' prefixed will
+        # get exported
+        for k in list(opts):
+            self.secnode.add_secnode_property(k, opts.pop(k))
 
         self.secnode.create_modules()
         # initialize all modules by getting them with Dispatcher.get_module,

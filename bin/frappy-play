@@ -22,14 +22,18 @@
 # *****************************************************************************
 
 import sys
-from os import path
+from pathlib import Path
+from frappy.lib import generalConfig
+from frappy.logging import logger
 
 # Add import path for inplace usage
-sys.path.insert(0, path.abspath(path.join(path.dirname(__file__), '..')))
+sys.path.insert(0, str(Path(__file__).absolute().parents[1]))
 
 from frappy.client.interactive import Console
 from frappy.playground import play, USAGE
 
+generalConfig.init()
+logger.init()
 if len(sys.argv) > 1:
     play(sys.argv[1])
 else:
