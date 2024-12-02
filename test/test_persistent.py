@@ -1,4 +1,3 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
 #
 # This program is free software; you can redistribute it and/or modify it under
@@ -23,6 +22,7 @@
 import json
 import os
 from os.path import join
+from pathlib import Path
 import pytest
 from frappy.config import Param
 from frappy.core import Module, ScaledInteger, IntRange, StringType, StructOf
@@ -30,8 +30,12 @@ from frappy.lib import generalConfig
 from frappy.persistent import PersistentParam, PersistentMixin
 
 
+class SecNodeStub:
+    pass
+
+
 class DispatcherStub:
-    def announce_update(self, modulename, pname, pobj):
+    def announce_update(self, moduleobj, pobj):
         pass
 
 
@@ -48,7 +52,8 @@ logger = LoggerStub()
 class ServerStub:
     def __init__(self, equipment_id):
         self.dispatcher = DispatcherStub()
-        self.dispatcher.equipment_id = equipment_id
+        self.secnode = SecNodeStub()
+        self.secnode.equipment_id = equipment_id
 
 
 class Mod(PersistentMixin, Module):
@@ -70,7 +75,7 @@ save_tests = [
 ]
 @pytest.mark.parametrize('cfg, data', save_tests)
 def test_save(tmpdir, cfg, data):
-    generalConfig.logdir = tmpdir
+    generalConfig.logdir = Path(tmpdir)
 
     cfg['description'] = ''
     m = Mod('m', logger, cfg, ServerStub('savetest'))
@@ -97,7 +102,7 @@ load_tests = [
 ]
 @pytest.mark.parametrize('cfg, data, written', load_tests)
 def test_load(tmpdir, cfg, data, written):
-    generalConfig.logdir = tmpdir
+    generalConfig.logdir = Path(tmpdir)
 
     os.makedirs(join(tmpdir, 'persistent'), exist_ok=True)
     with open(join(tmpdir, 'persistent', 'loadtest.m.json'), 'w', encoding='utf-8') as f:

@@ -1,6 +1,5 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
-# Copyright (c) 2015-2016 by the authors, see LICENSE
+# Copyright (c) 2015-2024 by the authors, see LICENSE
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -22,15 +21,15 @@
 # *****************************************************************************
 
 
-from os import path
+from pathlib import Path
 
 from frappy.gui.qt import QColor, uic
 
-uipath = path.dirname(__file__)
+uipath = Path(__file__).parent
 
 
 def loadUi(widget, uiname, subdir='ui'):
-    uic.loadUi(path.join(uipath, subdir, uiname), widget)
+    uic.loadUi(uipath / subdir / uiname, widget)
 
 
 def is_light_theme(palette):

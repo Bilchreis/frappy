@@ -1,4 +1,3 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
 #
 # This program is free software; you can redistribute it and/or modify it under
@@ -26,13 +25,13 @@
 
 
 import sys
+import ast
 from base64 import b64decode, b64encode
 
 from frappy.errors import ConfigError, ProgrammingError, \
-    ProtocolError, RangeError, WrongTypeError
+    RangeError, WrongTypeError
 from frappy.lib import clamp, generalConfig
 from frappy.lib.enum import Enum
-from frappy.parse import Parser
 from frappy.properties import HasProperties, Property
 
 generalConfig.set_default('lazy_number_validation', False)
@@ -41,8 +40,6 @@ generalConfig.set_default('lazy_number_validation', False)
 DEFAULT_MIN_INT = -16777216
 DEFAULT_MAX_INT = 16777216
 UNLIMITED = 1 << 64  # internal limit for integers, is probably high enough for any datatype size
-
-Parser = Parser()
 
 
 def shortrepr(value):
@@ -84,13 +81,36 @@ class DataType(HasProperties):
         return self(value)
 
     def from_string(self, text):
-        """interprets a given string and returns a validated (internal) value"""
-        # to evaluate values from configfiles, ui, etc...
-        raise NotImplementedError
+        """interprets a given string and returns a validated (internal) value
+
+        intended to be given e.g. from a GUI text input
+        """
+        try:
+            value = ast.literal_eval(text)
+        except Exception:
+            raise WrongTypeError(f'{shortrepr(text)} is no valid value') from None
+        return self(value)
+
+    def to_string(self, value):
+        """convert a value of this type into a string
+
+        This is intended for a GUI text input and is the opposite of
+        :meth:`from_string`
+        - no units are shown
+        - value is not checked before formatting
+
+        typically the output is a stringified value in python syntax except for
+        - StringType: the bare string is returned
+        - EnumType: the name of the enum is returned
+        """
+        return self.format_value(value, False)
 
     def export_datatype(self):
         """return a python object which after jsonifying identifies this datatype"""
-        raise NotImplementedError
+        raise ProgrammingError(
+            f"{type(self).__name__} is not able to be exported to SECoP. "
+            f"It is intended for internal use only."
+        )
 
     def export_value(self, value):
         """if needed, reformat value for transport"""
@@ -102,14 +122,19 @@ class DataType(HasProperties):
         note: for importing from gui/configfile/commandline use :meth:`from_string`
         instead.
         """
-        return value
+        return self(value)
 
-    def format_value(self, value, unit=None):
-        """format a value of this type into a str string
+    def format_value(self, value, unit=True):
+        """format a value of this type into a string
 
         This is intended for 'nice' formatting for humans and is NOT
         the opposite of :meth:`from_string`
-        if unit is given, use it, else use the unit of the datatype (if any)"""
+
+        possible values of unit:
+        - True: use the string of the datatype
+        - False: return a value interpretable by ast.literal_eval (internal use only)
+        - any other string: use as unit (internal use only)
+        """
         raise NotImplementedError
 
     def set_properties(self, **kwds):
@@ -191,8 +216,8 @@ class HasUnit:
 class FloatRange(HasUnit, DataType):
     """(restricted) float type
 
-    :param minval: (property **min**)
-    :param maxval: (property **max**)
+    :param min: (property **min**)
+    :param max: (property **max**)
     :param kwds: any of the properties below
     """
     min = Property('low limit', Stub('FloatRange'), extname='min', default=-sys.float_info.max)
@@ -203,11 +228,11 @@ class FloatRange(HasUnit, DataType):
     relative_resolution = Property('relative resolution', Stub('FloatRange', 0),
                                    extname='relative_resolution', default=1.2e-7)
 
-    def __init__(self, minval=None, maxval=None, **kwds):
+    def __init__(self, min=None, max=None, **kwds):  # pylint: disable=redefined-builtin
         super().__init__()
-        kwds['min'] = minval if minval is not None else -sys.float_info.max
-        kwds['max'] = maxval if maxval is not None else sys.float_info.max
-        self.set_properties(**kwds)
+        self.set_properties(min=min if min is not None else -sys.float_info.max,
+                            max=max if max is not None else sys.float_info.max,
+                            **kwds)
 
     def checkProperties(self):
         self.default = 0 if self.min <= 0 <= self.max else self.min
@@ -247,28 +272,20 @@ class FloatRange(HasUnit, DataType):
     def __repr__(self):
         hints = self.get_info()
         if 'min' in hints:
-            hints['minval'] = hints.pop('min')
+            hints['min'] = hints.pop('min')
         if 'max' in hints:
-            hints['maxval'] = hints.pop('max')
+            hints['max'] = hints.pop('max')
         return 'FloatRange(%s)' % (', '.join('%s=%r' % (k, v) for k, v in hints.items()))
 
     def export_value(self, value):
         """returns a python object fit for serialisation"""
         return float(value)
 
-    def import_value(self, value):
-        """returns a python object from serialisation"""
-        return float(value)
-
-    def from_string(self, text):
-        value = float(text)
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        if unit is None:
+    def format_value(self, value, unit=True):
+        if unit is True:
             unit = self.unit
         if unit:
-            return ' '.join([self.fmtstr % value, unit])
+            return f'{self.fmtstr % value} {unit}'
         return self.fmtstr % value
 
     def compatible(self, other):
@@ -281,18 +298,18 @@ class FloatRange(HasUnit, DataType):
 class IntRange(DataType):
     """restricted int type
 
-    :param minval: (property **min**)
-    :param maxval: (property **max**)
+    :param min: (property **min**)
+    :param max: (property **max**)
     """
     min = Property('minimum value', Stub('IntRange', -UNLIMITED, UNLIMITED), extname='min', mandatory=True)
     max = Property('maximum value', Stub('IntRange', -UNLIMITED, UNLIMITED), extname='max', mandatory=True)
     # a unit on an int is now allowed in SECoP, but do we need them in Frappy?
     # unit = Property('physical unit', StringType(), extname='unit', default='')
 
-    def __init__(self, minval=None, maxval=None):
+    def __init__(self, min=None, max=None):  # pylint: disable=redefined-builtin
         super().__init__()
-        self.set_properties(min=DEFAULT_MIN_INT if minval is None else minval,
-                            max=DEFAULT_MAX_INT if maxval is None else maxval)
+        self.set_properties(min=DEFAULT_MIN_INT if min is None else min,
+                            max=DEFAULT_MAX_INT if max is None else max)
 
     def checkProperties(self):
         self.default = 0 if self.min <= 0 <= self.max else self.min
@@ -315,7 +332,7 @@ class IntRange(DataType):
             except Exception:
                 raise WrongTypeError(f'can not convert {shortrepr(value)} to an int') from None
         if round(fvalue) != fvalue:
-            raise WrongTypeError('%r should be an int')
+            raise WrongTypeError(f'{value} should be an int')
         return value
 
     def validate(self, value, previous=None):
@@ -338,15 +355,7 @@ class IntRange(DataType):
         """returns a python object fit for serialisation"""
         return int(value)
 
-    def import_value(self, value):
-        """returns a python object from serialisation"""
-        return int(value)
-
-    def from_string(self, text):
-        value = int(text)
-        return self(value)
-
-    def format_value(self, value, unit=None):
+    def format_value(self, value, unit=True):
         return f'{value}'
 
     def compatible(self, other):
@@ -364,8 +373,8 @@ class IntRange(DataType):
 class ScaledInteger(HasUnit, DataType):
     """scaled integer (= fixed resolution float) type
 
-    :param minval: (property **min**)
-    :param maxval: (property **max**)
+    :param min: (property **min**)
+    :param max: (property **max**)
     :param kwds: any of the properties below
 
     note: limits are for the scaled float value
@@ -380,7 +389,8 @@ class ScaledInteger(HasUnit, DataType):
     relative_resolution = Property('relative resolution', FloatRange(0),
                                    extname='relative_resolution', default=1.2e-7)
 
-    def __init__(self, scale, minval=None, maxval=None, absolute_resolution=None, **kwds):
+    # pylint: disable=redefined-builtin
+    def __init__(self, scale, min=None, max=None, absolute_resolution=None, **kwds):
         super().__init__()
         try:
             scale = float(scale)
@@ -390,8 +400,8 @@ class ScaledInteger(HasUnit, DataType):
             absolute_resolution = scale
         self.set_properties(
             scale=scale,
-            min=DEFAULT_MIN_INT * scale if minval is None else float(minval),
-            max=DEFAULT_MAX_INT * scale if maxval is None else float(maxval),
+            min=DEFAULT_MIN_INT * scale if min is None else float(min),
+            max=DEFAULT_MAX_INT * scale if max is None else float(max),
             absolute_resolution=absolute_resolution,
             **kwds)
 
@@ -457,17 +467,16 @@ class ScaledInteger(HasUnit, DataType):
 
     def import_value(self, value):
         """returns a python object from serialisation"""
-        return self.scale * int(value)
+        try:
+            return self.scale * int(value)
+        except Exception:
+            raise WrongTypeError(f'can not import {shortrepr(value)} to scaled') from None
 
-    def from_string(self, text):
-        value = float(text)
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        if unit is None:
+    def format_value(self, value, unit=True):
+        if unit is True:
             unit = self.unit
         if unit:
-            return ' '.join([self.fmtstr % value, unit])
+            return f'{self.fmtstr % value} {unit}'
         return self.fmtstr % value
 
     def compatible(self, other):
@@ -484,6 +493,7 @@ class EnumType(DataType):
     :param members: members dict or None when using kwds only
     :param kwds: (additional) members
     """
+
     def __init__(self, enum_or_name='', members=None, **kwds):
         super().__init__()
         if members is not None:
@@ -509,10 +519,6 @@ class EnumType(DataType):
         """returns a python object fit for serialisation"""
         return int(self(value))
 
-    def import_value(self, value):
-        """returns a python object from serialisation"""
-        return self(value)
-
     def __call__(self, value):
         """accepts integers and strings, converts to EnumMember (may be used like an int)"""
         try:
@@ -523,10 +529,19 @@ class EnumType(DataType):
             raise WrongTypeError(f'{shortrepr(value)} must be either int or str for an enum value') from None
 
     def from_string(self, text):
-        return self(text)
+        try:
+            return self._enum(text.strip())
+        except KeyError:
+            return super().from_string(text)
 
-    def format_value(self, value, unit=None):
-        return f'{self._enum[value].name}<{self._enum[value].value}>'
+    def format_value(self, value, unit=True):
+        if unit is False:
+            return repr(value.name)
+        # for humans: contains more information (name + code)
+        return f'{value.name}<{value.value}>'
+
+    def to_string(self, value):
+        return value.name
 
     def set_name(self, name):
         self._enum.name = name
@@ -584,14 +599,12 @@ class BLOBType(DataType):
 
     def import_value(self, value):
         """returns a python object from serialisation"""
-        return b64decode(value)
+        try:
+            return b64decode(value)
+        except Exception:
+            raise WrongTypeError(f'can not b64decode {shortrepr(value)}') from None
 
-    def from_string(self, text):
-        value = text
-        # XXX: what should we do here?
-        return self(value)
-
-    def format_value(self, value, unit=None):
+    def format_value(self, value, unit=True):
         return repr(value)
 
     def compatible(self, other):
@@ -655,16 +668,14 @@ class StringType(DataType):
         """returns a python object fit for serialisation"""
         return f'{value}'
 
-    def import_value(self, value):
-        """returns a python object from serialisation"""
-        return str(value)
+    def format_value(self, value, unit=True):
+        return repr(value)
+
+    def to_string(self, value):
+        return value
 
     def from_string(self, text):
-        value = str(text)
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        return repr(value)
+        return self(text)
 
     def compatible(self, other):
         try:
@@ -706,29 +717,26 @@ class BoolType(DataType):
     def __repr__(self):
         return 'BoolType()'
 
-    def __call__(self, value):
+    def from_string(self, text):
         """accepts 0, False, 1, True"""
-        # TODO: probably remove conversion from string (not needed anymore with python cfg)
-        if value in [0, '0', 'False', 'false', 'no', 'off', False]:
+        value = text.strip()
+        if value in ['0', 'False', 'false', 'no', 'off']:
             return False
-        if value in [1, '1', 'True', 'true', 'yes', 'on', True]:
+        if value in ['1', 'True', 'true', 'yes', 'on']:
             return True
+        raise WrongTypeError(f'{shortrepr(value)} is not a boolean value!')
+
+    def __call__(self, value):
+        if value in (0, 1):
+            return bool(value)
         raise WrongTypeError(f'{shortrepr(value)} is not a boolean value!')
 
     def export_value(self, value):
         """returns a python object fit for serialisation"""
         return self(value)
 
-    def import_value(self, value):
-        """returns a python object from serialisation"""
-        return self(value)
-
-    def from_string(self, text):
-        value = text
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        return repr(bool(value))
+    def format_value(self, value, unit=True):
+        return repr(value)
 
     def compatible(self, other):
         other(False)
@@ -763,6 +771,10 @@ class ArrayOf(DataType):
             maxlen = minlen or 100
         self.members = members
         self.set_properties(minlen=minlen, maxlen=maxlen)
+
+    @property
+    def unit(self):
+        return self.members.unit
 
     def copy(self):
         """DataType.copy does not work when members are enums"""
@@ -812,7 +824,7 @@ class ArrayOf(DataType):
             return tuple(self.members(v) for v in value)
         except Exception as e:
             errcls = RangeError if isinstance(e, RangeError) else WrongTypeError
-            raise errcls('can not convert some array elements') from e
+            raise errcls(f'can not convert some array elements: {e!r}') from e
 
     def validate(self, value, previous=None):
         self.check_type(value)
@@ -822,7 +834,7 @@ class ArrayOf(DataType):
             return tuple(self.members.validate(v) for v in value)
         except Exception as e:
             errcls = RangeError if isinstance(e, RangeError) else WrongTypeError
-            raise errcls('some array elements are invalid') from e
+            raise errcls(f'some array elements are invalid: {e!r}') from e
 
     def export_value(self, value):
         """returns a python object fit for serialisation"""
@@ -833,25 +845,20 @@ class ArrayOf(DataType):
         """returns a python object from serialisation"""
         return tuple(self.members.import_value(elem) for elem in value)
 
-    def from_string(self, text):
-        value, rem = Parser.parse(text)
-        if rem:
-            raise ProtocolError(f'trailing garbage: {rem!r}')
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        innerunit = ''
-        if unit is None:
+    def format_value(self, value, unit=True):
+        innerunit = False
+        if unit is True:
             members = self.members
             while isinstance(members, ArrayOf):
                 members = members.members
             if members.unit:
                 unit = members.unit
             else:
-                innerunit = None
+                unit = ''
+                innerunit = True
         res = f"[{', '.join([self.members.format_value(elem, innerunit) for elem in value])}]"
         if unit:
-            return ' '.join([res, unit])
+            return f'{res} {unit}'
         return res
 
     def compatible(self, other):
@@ -907,7 +914,7 @@ class TupleOf(DataType):
             return tuple(sub(elem) for sub, elem in zip(self.members, value))
         except Exception as e:
             errcls = RangeError if isinstance(e, RangeError) else WrongTypeError
-            raise errcls('can not convert some tuple elements') from e
+            raise errcls(f'can not convert some tuple elements: {e!r}') from e
 
     def validate(self, value, previous=None):
         self.check_type(value)
@@ -917,7 +924,7 @@ class TupleOf(DataType):
             return tuple(sub.validate(v, p) for sub, v, p in zip(self.members, value, previous))
         except Exception as e:
             errcls = RangeError if isinstance(e, RangeError) else WrongTypeError
-            raise errcls('some tuple elements are invalid') from e
+            raise errcls(f'some tuple elements are invalid: {e!r}') from e
 
     def export_value(self, value):
         """returns a python object fit for serialisation"""
@@ -928,14 +935,8 @@ class TupleOf(DataType):
         """returns a python object from serialisation"""
         return tuple(sub.import_value(elem) for sub, elem in zip(self.members, value))
 
-    def from_string(self, text):
-        value, rem = Parser.parse(text)
-        if rem:
-            raise ProtocolError(f'trailing garbage: {rem!r}')
-        return self(value)
-
-    def format_value(self, value, unit=None):
-        return f"({', '.join([sub.format_value(elem) for sub, elem in zip(self.members, value)])})"
+    def format_value(self, value, unit=True):
+        return f"({', '.join([sub.format_value(elem, unit) for sub, elem in zip(self.members, value)])})"
 
     def compatible(self, other):
         if not isinstance(other, TupleOf):
@@ -992,7 +993,7 @@ class StructOf(DataType):
         return res
 
     def __repr__(self):
-        opt = f', optional={self.optional!r}' if set(self.optional) == set(self.members) else ''
+        opt = f', optional={self.optional!r}' if set(self.optional) != set(self.members) else ''
         return 'StructOf(%s%s)' % (', '.join(
             ['%s=%s' % (n, repr(st)) for n, st in list(self.members.items())]), opt)
 
@@ -1046,14 +1047,13 @@ class StructOf(DataType):
         return {str(k): self.members[k].import_value(v)
                 for k, v in value.items()}
 
-    def from_string(self, text):
-        value, rem = Parser.parse(text)
-        if rem:
-            raise ProtocolError(f'trailing garbage: {rem!r}')
-        return self(dict(value))
-
-    def format_value(self, value, unit=None):
-        return '{%s}' % (', '.join(['%s=%s' % (k, self.members[k].format_value(v)) for k, v in value.items()]))
+    def format_value(self, value, unit=True):
+        if unit is False:
+            return '{%s}' % (', '.join(['%r: %s' % (k, self.members[k].format_value(v, False))
+                                        for k, v in value.items()]))
+        # more human readable format (no quotes on keys)
+        return '{%s}' % (', '.join(['%s=%s' % (k, self.members[k].format_value(v, True))
+                                    for k, v in value.items()]))
 
     def compatible(self, other):
         try:
@@ -1113,14 +1113,11 @@ class CommandType(DataType):
         raise ProgrammingError('values of type command can not be transported!')
 
     def from_string(self, text):
-        value, rem = Parser.parse(text)
-        if rem:
-            raise ProtocolError(f'trailing garbage: {rem!r}')
-        return self(value)
+        raise ProgrammingError('a string can not be converted to a command')
 
-    def format_value(self, value, unit=None):
+    def format_value(self, value, unit=True):
         # actually I have no idea what to do here!
-        raise NotImplementedError
+        raise ProgrammingError('commands can not be converted to a string')
 
     def compatible(self, other):
         try:
@@ -1253,15 +1250,19 @@ UInt64 = IntRange(0, (1 << 64) - 1)
 
 # Goodie: Convenience Datatypes for Programming
 class LimitsType(TupleOf):
-    def __init__(self, members):
-        super().__init__(members, members)
+    def __init__(self, member):
+        super().__init__(member, member)
 
-    def __call__(self, value):
+    def validate(self, value, previous=None):
         """accepts an ordered tuple of numeric member types"""
-        limits = TupleOf.validate(self, value)
+        limits = TupleOf.validate(self, value, previous)
         if limits[1] < limits[0]:
-            raise RangeError(f'Maximum Value {limits[1]} must be greater than minimum value {limits[0]}!')
+            raise RangeError(f'maximum value {limits[1]} must be greater than '
+                             f'minimum value {limits[0]}')
         return limits
+
+    def copy(self):
+        return LimitsType(TupleOf.copy(self).members[0])
 
 
 class StatusType(TupleOf):
@@ -1327,11 +1328,11 @@ DATATYPES = {
     'bool': lambda **kwds:
         BoolType(),
     'int': lambda min, max, **kwds:
-        IntRange(minval=min, maxval=max),
+        IntRange(min=min, max=max),
     'scaled': lambda scale, min, max, **kwds:
-        ScaledInteger(scale=scale, minval=min*scale, maxval=max*scale, **floatargs(kwds)),
+        ScaledInteger(scale=scale, min=min*scale, max=max*scale, **floatargs(kwds)),
     'double': lambda min=None, max=None, **kwds:
-        FloatRange(minval=min, maxval=max, **floatargs(kwds)),
+        FloatRange(min=min, max=max, **floatargs(kwds)),
     'blob': lambda maxbytes, minbytes=0, **kwds:
         BLOBType(minbytes=minbytes, maxbytes=maxbytes),
     'string': lambda minchars=0, maxchars=None, isUTF8=False, **kwds:

@@ -1,4 +1,3 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
 #
 # This program is free software; you can redistribute it and/or modify it under
@@ -21,6 +20,7 @@
 # *****************************************************************************
 
 import os
+from pathlib import Path
 import re
 from collections import Counter
 
@@ -129,8 +129,7 @@ class Config(dict):
 
 
 def process_file(filename, log):
-    with open(filename, 'rb') as f:
-        config_text = f.read()
+    config_text = filename.read_bytes()
     node = NodeCollector()
     mods = Collector(Mod)
     ns = {'Node': node.add, 'Mod': mods.add, 'Param': Param, 'Command': Param, 'Group': Group}
@@ -150,22 +149,21 @@ def process_file(filename, log):
 def to_config_path(cfgfile, log):
     candidates = [cfgfile + e for e in ['_cfg.py', '.py', '']]
     if os.sep in cfgfile:  # specified as full path
-        filename = cfgfile if os.path.exists(cfgfile) else None
+        file = Path(cfgfile) if Path(cfgfile).exists() else None
     else:
-        for filename in [os.path.join(d, candidate)
-                         for d in generalConfig.confdir.split(os.pathsep)
-                         for candidate in candidates]:
-            if os.path.exists(filename):
+        for file in [Path(d) / candidate
+                     for d in generalConfig.confdir
+                     for candidate in candidates]:
+            if file.exists():
                 break
         else:
-            filename = None
-
-    if filename is None:
+            file = None
+    if file is None:
         raise ConfigError(f"Couldn't find cfg file {cfgfile!r} in {generalConfig.confdir}")
-    if not filename.endswith('_cfg.py'):
-        log.warning("Config files should end in '_cfg.py': %s", os.path.basename(filename))
-    log.debug('Using config file %s for %s', filename, cfgfile)
-    return filename
+    if not file.name.endswith('_cfg.py'):
+        log.warning("Config files should end in '_cfg.py': %s", file.name)
+    log.debug('Using config file %s for %s', file, cfgfile)
+    return file
 
 
 def load_config(cfgfiles, log):
@@ -174,8 +172,8 @@ def load_config(cfgfiles, log):
     Only the node-section of the first config file will be returned.
     The others will be discarded.
     Arguments
-    - cfgfiles : str
-        Comma separated list of config-files
+    - cfgfiles : list
+        List of config file paths
     - log : frappy.logging.Mainlogger
         Logger aquired from frappy.logging
     Returns
@@ -183,8 +181,8 @@ def load_config(cfgfiles, log):
         merged configuration
     """
     config = None
-    for cfgfile in cfgfiles.split(','):
-        filename = to_config_path(cfgfile, log)
+    for cfgfile in cfgfiles:
+        filename = to_config_path(str(cfgfile), log)
         log.debug('Parsing config file %s...', filename)
         cfg = process_file(filename, log)
         if config:

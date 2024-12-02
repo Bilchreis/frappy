@@ -1,6 +1,5 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
-# Copyright (c) 2015-2023 by the authors, see LICENSE
+# Copyright (c) 2015-2024 by the authors, see LICENSE
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -22,9 +21,9 @@
 #
 # *****************************************************************************
 
-from frappy.gui.qt import QAction, QInputDialog, QKeySequence, QMainWindow, \
-    QMessageBox, QObject, QPixmap, QSettings, QShortcut, Qt, QWidget, \
-    pyqtSignal, pyqtSlot
+from frappy.gui.qt import QAction, QByteArray, QInputDialog, QKeySequence, \
+    QMainWindow, QMessageBox, QObject, QPixmap, QSettings, QShortcut, Qt, \
+    QWidget, pyqtSignal, pyqtSlot
 
 import frappy.version
 from frappy.gui.connection import QSECNode
@@ -89,10 +88,11 @@ class HistorySerializer(QObject):
         settings = QSettings()
         settings.setValue('consoleHistory', self.history)
 
+
 class MainWindow(QMainWindow):
     recentNodesChanged = pyqtSignal()
 
-    def __init__(self, hosts, logger, parent=None):
+    def __init__(self, args, logger, parent=None):
         super().__init__(parent)
 
         # centralized handling for logging and cmd-history
@@ -104,6 +104,11 @@ class MainWindow(QMainWindow):
 
         loadUi(self, 'mainwin.ui')
         Colors._setPalette(self.palette())
+
+        self._nodeWidgets = {}
+
+        if args.detailed:
+            self.actionDetailed_View.setChecked(True)
 
         self.toolBar.hide()
         self.buildRecentNodeMenu()
@@ -128,10 +133,15 @@ class MainWindow(QMainWindow):
         self.recentNodesChanged.connect(greeter.loadRecent)
         self.tab.addPanel(greeter, 'Welcome')
 
-        self._nodeWidgets = {}
+        self.restoreGeometry(settings.value('geometry', '', QByteArray))
 
         # add localhost (if available) and SEC nodes given as arguments
-        self.addNodes(hosts)
+        self.addNodes(args.node)
+
+    def closeEvent(self, event):
+        settings = QSettings()
+        settings.setValue('geometry', self.saveGeometry())
+        return super().closeEvent(event)
 
     @pyqtSlot()
     def on_actionAbout_triggered(self):
@@ -145,7 +155,7 @@ class MainWindow(QMainWindow):
             f'''
             <h2>About Frappy GUI</h2>
             <p>A graphical client for the SECoP protocol.</p>
-            <p>© 2017-2023 Frappy contributors:</p>
+            <p>© 2017-2024 Frappy contributors:</p>
             <ul>
               <li><a href="mailto:markus.zolliker@psi.ch">Markus Zolliker</a></li>
               <li><a href="mailto:enrico.faulhaber@frm2.tum.de">Enrico Faulhaber</a></li>
@@ -287,10 +297,6 @@ class MainWindow(QMainWindow):
             self.tab.setCurrentIndex(curr_idx)
 
     def _rebuildAdvanced(self, advanced):
-        if advanced:
-            pass
-        else:
-            pass
         for widget in self._nodeWidgets.values():
             widget._rebuildAdvanced(advanced)
 
