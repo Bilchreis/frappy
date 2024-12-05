@@ -11,9 +11,9 @@ from frappy.modules import Command, Drivable, Parameter,Attached,Readable
 
 
 class TemperatureController(Drivable):
-    value   = Parameter("Heater temperature at reactor cell",FloatRange(minval=0,maxval=5000),default = 0,unit = "K" )
-    target  = Parameter("desired heater temperature at reactor cell",FloatRange(minval=0,maxval=5000),default = 0,unit = "K" )
-    ramp    = Parameter("desired ramp speed for the heater temperature",FloatRange(minval=0,maxval=1000),default = 0,unit = "K/min" ,readonly = False)
+    value   = Parameter("Heater temperature at reactor cell",FloatRange(min=0,max=5000),default = 0,unit = "K" )
+    target  = Parameter("desired heater temperature at reactor cell",FloatRange(min=0,max=5000),default = 0,unit = "K" )
+    ramp    = Parameter("desired ramp speed for the heater temperature",FloatRange(min=0,max=1000),default = 0,unit = "K/min" ,readonly = False)
     pollinterval = Parameter("polling interval",datatype=FloatRange(0), default=5)
     tolerance = Parameter("Temperature range for stability checking",datatype=FloatRange(0,100),default = 5,unit = "K")
 
@@ -141,7 +141,7 @@ class TemperatureController(Drivable):
 
 class TemperatureSensor(Readable):
     value   = Parameter("Heater temperature at reactor cell",
-                        FloatRange(minval=0,maxval=5000),
+                        FloatRange(min=0,max=5000),
                         default = 0,
                         unit = "K" )    
 

@@ -49,7 +49,7 @@ class Test_ND_arrays(Readable):
                             datatype=
                             ArrayOf(
                                 members=ArrayOf(
-                                    members=IntRange(minval=0,maxval=100),
+                                    members=IntRange(min=0,max=100),
                                     minlen=5,
                                     maxlen=5),
                                 minlen=5,
@@ -62,7 +62,7 @@ class Test_ND_arrays(Readable):
                         ArrayOf(
                             ArrayOf(
                                 members=ArrayOf(
-                                    members=IntRange(minval=0,maxval=100),
+                                    members=IntRange(min=0,max=100),
                                     minlen=0,
                                     maxlen=5),
                                 minlen=0,
@@ -220,7 +220,7 @@ class OPYD_test_struct(Drivable):
 
     @Command(StructOf(
         name=StringType(),
-        id = IntRange(maxval=1000,minval=0),
+        id = IntRange(max=1000,min=0),
         sort = BoolType()),
         result= IntRange())        
     def test_cmd(self,name,id,sort):
