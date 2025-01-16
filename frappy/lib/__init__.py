@@ -31,6 +31,7 @@ import threading
 import traceback
 from configparser import ConfigParser
 from os import environ, path
+from pathlib import Path
 
 
 SECoP_DEFAULT_PORT = 10767
@@ -56,11 +57,12 @@ class GeneralConfig:
 
         :param configfile: if present, keys and values from the [FRAPPY] section are read
 
-        default values for 'piddir', 'logdir' and 'confdir' are guessed from the
-        location of this source file and from sys.executable.
-
-        if configfile is not given, the general config file is determined by
-        the env. variable FRAPPY_CONFIG_FILE or <confdir>/generalConfig.cfg is used
+        The following locations are searched for the generalConfig.cfg file.
+          - command line argument
+          - environment variable FRAPPY_CONFIG_FILE
+          - git location (../cfg)
+          - local location (cwd)
+          - global location (/etc/frappy)
 
         if a configfile is given, the values from the FRAPPY section are
         overriding above defaults
@@ -68,30 +70,12 @@ class GeneralConfig:
         finally, the env. variables FRAPPY_PIDDIR, FRAPPY_LOGDIR and FRAPPY_CONFDIR
         are overriding these values when given
         """
+
+        configfile = self._get_file_location(configfile)
+
         cfg = {}
         mandatory = 'piddir', 'logdir', 'confdir'
-        repodir = path.abspath(path.join(path.dirname(__file__), '..', '..'))
-        # create default paths
-        if path.splitext(sys.executable)[1] == ".exe" and not path.basename(sys.executable).startswith('python'):
-            # special MS windows environment
-            cfg.update(piddir='./', logdir='./log', confdir='./')
-        elif path.exists(path.join(repodir, 'cfg')):
-            # running from git repo
-            cfg['confdir'] = path.join(repodir, 'cfg')
-            # take logdir and piddir from <repodir>/cfg/generalConfig.cfg
-        else:
-            # running on installed system (typically with systemd)
-            cfg.update(piddir='/var/run/frappy', logdir='/var/log', confdir='/etc/frappy')
-        if configfile is None:
-            configfile = environ.get('FRAPPY_CONFIG_FILE')
-            if configfile:
-                configfile = path.expanduser(configfile)
-                if not path.exists(configfile):
-                    raise FileNotFoundError(configfile)
-            else:
-                configfile = path.join(cfg['confdir'], 'generalConfig.cfg')
-                if not path.exists(configfile):
-                    configfile = None
+        repodir = Path(__file__).parents[2].expanduser().resolve()
         if configfile:
             parser = ConfigParser()
             parser.optionxform = str
@@ -99,22 +83,68 @@ class GeneralConfig:
             # only the FRAPPY section is relevant, other sections might be used by others
             for key, value in parser['FRAPPY'].items():
                 if value.startswith('./'):
-                    cfg[key] = path.abspath(path.join(repodir, value))
+                    cfg[key] = (repodir / value).absolute()
                 else:
                     # expand ~ to username, also in path lists separated with ':'
                     cfg[key] = ':'.join(path.expanduser(v) for v in value.split(':'))
             if cfg.get('confdir') is None:
-                cfg['confdir'] = path.dirname(configfile)
+                cfg['confdir'] = configfile.parent
+        # environment variables will overwrite the config file
+        missing_keys = []
         for key in mandatory:
-            cfg[key] = environ.get(f'FRAPPY_{key.upper()}', cfg.get(key))
-        missing_keys = [key for key in mandatory if cfg[key] is None]
+            env = environ.get(f'FRAPPY_{key.upper()}') or cfg.get(key)
+            if env is None:
+                if self.defaults.get(key) is None:
+                    missing_keys.append(key)
+            else:
+                if not isinstance(env, Path):
+                    if key == 'confdir':
+                        env = [Path(v) for v in env.split(':')]
+                    else:
+                        env = Path(env)
+                cfg[key] = env
         if missing_keys:
             if configfile:
                 raise KeyError(f"missing value for {' and '.join(missing_keys)} in {configfile}")
-            raise KeyError('missing %s' % ' and '.join('FRAPPY_%s' % k.upper() for k in missing_keys))
+
+            if len(missing_keys) < 3:
+                # user specified at least one env variable already
+                missing = ' (missing %s)' % ', '.join('FRAPPY_%s' % k.upper() for k in missing_keys)
+            else:
+                missing = ''
+            raise FileNotFoundError(
+                'Could not determine config file location for the general frappy config. '
+                f'Provide a config file or all required environment variables{missing}. '
+                'For more information, see frappy-server --help.'
+            )
+        if 'confdir' in cfg and isinstance(cfg['confdir'], Path):
+            cfg['confdir'] = [cfg['confdir']]
         # this is not customizable
         cfg['basedir'] = repodir
         self._config = cfg
+
+    def _get_file_location(self, configfile):
+        """Determining the defaultConfig.cfg location as documented in init()"""
+        # given as command line arg
+        if configfile and Path(configfile).exists():
+            return configfile
+        # if not given as argument, check different sources
+        # env variable
+        fromenv = environ.get('FRAPPY_CONFIG_FILE')
+        if fromenv and Path(fromenv).exists():
+            return fromenv
+        # from ../cfg (there if running from checkout)
+        repodir = Path(__file__).parents[2].expanduser().resolve()
+        if (repodir / 'cfg' / 'generalConfig.cfg').exists():
+            return repodir / 'cfg' / 'generalConfig.cfg'
+        localfile = Path.cwd() / 'generalConfig.cfg'
+        if localfile.exists():
+            return localfile
+        # TODO: leave this hardcoded?
+        globalfile = Path('/etc/frappy/generalConfig.cfg')
+        if globalfile.exists():
+            return globalfile
+        return None
 
     def __getitem__(self, key):
         """access for keys known to exist
@@ -154,6 +184,11 @@ class GeneralConfig:
     @property
     def initialized(self):
         return bool(self._config)
+
+    def update_defaults(self, **updates):
+        """Set a default value, when there is not already one for each dict entry."""
+        for key, value in updates.items():
+            self.set_default(key, value)
 
     def set_default(self, key, value):
         """set a default value, in case not set already"""
@@ -419,3 +454,26 @@ def merge_status(*args):
     # use dict instead of set for preserving order
     merged = {m: True for mm in merged for m in mm.split(', ')}
     return maxcode, ', '.join(merged)
+
+
+class _Raiser:
+    def __init__(self, modname):
+        self.modname = modname
+
+    def __getattr__(self, name):
+        # Just retry the import, it will give the most useful exception.
+        __import__(self.modname)
+
+    def __bool__(self):
+        return False
+
+
+def delayed_import(modname):
+    """Import a module, and return an object that raises a delayed exception
+    on access if it failed.
+    """
+    try:
+        module = __import__(modname, None, None, ['*'])
+    except Exception:
+        return _Raiser(modname)
+    return module

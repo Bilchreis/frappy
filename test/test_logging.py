@@ -1,4 +1,3 @@
-#  -*- coding: utf-8 -*-
 # *****************************************************************************
 #
 # This program is free software; you can redistribute it and/or modify it under
@@ -20,13 +19,27 @@
 #
 # *****************************************************************************
 
-import pytest
 import mlzlog
+import pytest
+
+import frappy.logging
+from frappy.logging import HasComlog, generalConfig, init_remote_logging, \
+    logger
 from frappy.modules import Module
 from frappy.protocol.dispatcher import Dispatcher
-from frappy.protocol.interface import encode_msg_frame, decode_msg
-import frappy.logging
-from frappy.logging import logger, generalConfig, HasComlog
+from frappy.protocol.interface import decode_msg, encode_msg_frame
+
+
+class SecNodeStub:
+    def __init__(self):
+        self.modules = {}
+        self.name = ""
+
+    def add_module(self, module, modname):
+        self.modules[modname] = module
+
+    def get_module(self, modname):
+        return self.modules[modname]
 
 
 class ServerStub:
@@ -34,6 +47,7 @@ class ServerStub:
     shutdown = None
 
     def __init__(self):
+        self.secnode = SecNodeStub()
         self.dispatcher = Dispatcher('', logger.log.getChild('dispatcher'), {}, self)
 
 
@@ -98,7 +112,7 @@ def init_(monkeypatch):
                 def __init__(self, name, srv, **kwds):
                     kwds['description'] = ''
                     super().__init__(name or 'mod', logger.log.getChild(name), kwds, srv)
-                    srv.dispatcher.register_module(self, name, name)
+                    srv.secnode.add_module(self, name)
                     self.result[:] = []
 
                 def earlyInit(self):
@@ -115,6 +129,7 @@ def init_(monkeypatch):
 
             generalConfig.testinit(logger_root='frappy', comlog=comlog)
             logger.init(console_level)
+            init_remote_logging(logger.log)
             self.srv = ServerStub()
 
             self.conn1 = Connection('conn1', self.srv.dispatcher, self.result_dict['conn1'])

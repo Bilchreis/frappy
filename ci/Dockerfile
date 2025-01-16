@@ -9,10 +9,11 @@ RUN apt-get update && \
           openssh-client \
           make \
           locales \
+          libgl1 \
           python3 \
           python3-dev \
-          python3-tango \
-          python3-venv python3-setuptools \
+          python3-venv \
+          python3-setuptools \
           virtualenv
 
 
@@ -35,8 +36,10 @@ RUN virtualenv /home/jenkins/tools2 && \
 RUN virtualenv -p /usr/bin/python3 --system-site-packages /home/jenkins/secopvenv && \
     git clone https://forge.frm2.tum.de/review/secop/frappy /home/jenkins/frappy && \
     . /home/jenkins/secopvenv/bin/activate && \
-    pip install -U pip wheel setuptools && \
-    pip install -r /home/jenkins/frappy/requirements-dev.txt -r /home/jenkins/frappy/requirements.txt pylint pytest && \
+    pip install -U pip wheel setuptools importlib_metadata && \
+    pip install -r /home/jenkins/frappy/requirements-dev.txt \
+                -r /home/jenkins/frappy/requirements-gui.txt \
+                -r /home/jenkins/frappy/requirements.txt pylint pytest && \
     rm -rf /home/jenkins/frappy
 
 
