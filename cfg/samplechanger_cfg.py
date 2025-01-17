@@ -23,8 +23,6 @@ Mod('hardware',
     
    
     pollinterval = 0.1,
-    stop_State = {'stopped' : False,'interrupted_prog' : 'none'},
-    pause_State = {'paused' : False,'interrupted_prog' : 'none'}
 
 )
 

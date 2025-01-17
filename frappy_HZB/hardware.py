@@ -38,7 +38,7 @@ SAFETYSTATUS = {
 } 
 
 
-RESET_PROG = 'reset.urp'
+
 
 class RobotIO(StringIO):
     
@@ -128,20 +128,7 @@ class hardware(HasIO,Readable):
                                      group = 'Status Info')
     
     
-    stop_State = Parameter("Robot state when stop was pressed",
-                           datatype=StructOf(stopped = BoolType(),
-                                             interrupted_prog = StringType(),
-                                             ),
-                           visibility = 'expert',
-                           default = {'stopped':False,'interrupted_prog':'none'}
-                           )
     
-    pause_State = Parameter("Robot state when pause was pressed",
-                           datatype=StructOf(paused = BoolType(),
-                                             interrupted_prog = StringType(),
-                                             ),
-                           visibility = 'expert',
-                           default = {'paused':False,'interrupted_prog':'none'})
     
     
     def doPoll(self):
@@ -167,48 +154,7 @@ class hardware(HasIO,Readable):
 
         raise ReadFailedError("Unknown safetytatus:" + safety_stat)
 
-    def write_target(self,target):
-        # Is Robot in remote control Mode?        
-        
-        if self.safetystatus > SAFETYSTATUS['REDUCED']:
-            raise IsErrorError('Robots is locked due to a safety related problem (' + str(self.safetystatus.name) + ") Please refer to instructions on the controller tablet or try 'clear_error' command.")
-            
-        
-        if not self.is_in_remote_control:
-            raise ImpossibleError('Robot arm is in local control mode, please switch to remote control mode on the Robot controller tablet')
-        
-        # Is the Robot in a stpped state?
-        if self.stop_State['stopped']:
-            raise IsErrorError('cannot run program when execution was Stopped, please reset and check for consistency')
-        
-        if self.pause_State['paused']:
-            raise IsBusyError("continue loaded program before executing "+ target)
-        
-        if self.status[0] == BUSY or self.status[0] == PREPARING:
-            raise IsBusyError('Robot is already executing another program')
-        
-        if self.status[0] >= 400 and self.status[0] != STOPPED:
-            raise IsErrorError("Robot is in an error state. program '"+target+ "' cannot be exectuted")
-        
-        load_reply = str(self.communicate(f'load {target}'))
-              
-        
-        if re.match(r'Loading program: .*%s' % target,load_reply):
-            self._run_loaded_program()
-            self.value = target
-            return target
-           
-        elif re.match(r'File not found: .*%s' % target,load_reply):
-            raise InternalError('Program not found: '+target)
-        
-        elif re.match(r'Error while loading program: .*%s' % target,load_reply):
-            raise InternalError('write_target ERROR while loading program: '+ target)
-            
-        else:
-            self.status = ERROR, 'unknown answer: '+ load_reply 
-            raise InternalError('unknown answer: '+load_reply) 
-        
-        
+   
     
     
     def _run_loaded_program(self):
@@ -217,9 +163,6 @@ class hardware(HasIO,Readable):
 
         
         if play_reply == 'Starting program':
-            # Reset paused state
-            self.pause_State = {'paused'  : False, 'interrupted_prog' : self.loaded_prog}
-            self.stop_State  = {'stopped' : False, 'interrupted_prog' : self.loaded_prog}
             self.status = BUSY, "Starting program"
         else:
             raise InternalError("Failed to execute: play")
@@ -282,7 +225,6 @@ class hardware(HasIO,Readable):
     
     def read_status(self):
     
-        
         if not self.read_is_in_remote_control():
             return LOCAL_CONTROL, "Robot is in 'local control' mode"
 
@@ -293,8 +235,8 @@ class hardware(HasIO,Readable):
         if self.pause_State['paused']:
             return PAUSED, 'Program execution paused'
         
-        if self.stop_State['stopped']:
-            return STOPPED, 'Program execution stopped'
+        if self.status[0] == STOPPED:
+            return self.status
                 
         if self.status[0] == ERROR:
             return self.status
@@ -304,8 +246,7 @@ class hardware(HasIO,Readable):
         
         
         if self._program_running() and 'RUNNING' == self.read_robotmode():
-            if self.value == RESET_PROG:
-                return BUSY , 'resetting robot'
+
             
             return BUSY, 'Program running'    	    
         
@@ -326,145 +267,59 @@ class hardware(HasIO,Readable):
         """Stop execution of program"""
         
         # already stopped
-        if self.stop_State['stopped']:
+        if self.status[0] == STOPPED:
             raise ImpossibleError('module is already stopped')
-        
-        stopped_struct = {'stopped' : self._program_running(), 'interrupted_prog' : self.value}
+
         
      
         stop_reply  = str(self.communicate('stop'))
         
-        if stop_reply ==  'Stopped' and stopped_struct['stopped']:
+        if stop_reply ==  'Stopped':
             self.status = STOPPED, "Stopped execution"
             
-            # Rollback side effects of stopped Program
-            if re.match(r'in\d+\.urp',stopped_struct['interrupted_prog']):
-                pos = self.attached_storage.last_pos
-                self.attached_storage.mag.removeSample(pos)
-                 
-            if re.match(r'out\d+\.urp',stopped_struct['interrupted_prog']):
-                #Sample is already removed from internal structure
-                pass
-            
-            if re.match(r'messout.urp',stopped_struct['interrupted_prog']):
-                #Sample is already removed from internal structure
-                pass
-            
-            if re.match(r'messpos\d+\.urp',stopped_struct['interrupted_prog']):
-                pos = self.attached_sample.value
-                self.attached_storage.mag.removeSample(pos)
-                self.attached_sample.value = 0
-
-            
-            if re.match(r'messposin\d+\.urp',stopped_struct['interrupted_prog']):
-                pos = self.attached_sample.value
-                self.attached_storage.mag.removeSample(pos)
-                self.attached_sample.value = 0
-                
-            if re.match(r'messen.urp',stopped_struct['interrupted_prog']):
-                pos = self.attached_sample.value
-                self.attached_storage.mag.removeSample(pos)
-                self.attached_sample.value = 0
-                
-            
-            
+           
         elif stop_reply == 'Failed to execute: stop':
             raise InternalError("Failed to execute: stop")
             
             
-            
-        self.stop_State = stopped_struct
-    
-    @Command(group ='control')
-    def play(self):
-        """Start/continue execution of program"""
-        
+   
+    @Command(StringType(maxchars=40),group = 'control')
+    def run_program(self,program_name):
+        """Runs the requested program on the robot"""
         if self.safetystatus > SAFETYSTATUS['REDUCED']:
-            raise IsErrorError('Robots is locked due to a safety related problem: ' + str(self.safetystatus) )
+            raise IsErrorError('Robots is locked due to a safety related problem (' + str(self.safetystatus.name) + ") Please refer to instructions on the controller tablet or try 'clear_error' command.")
+            
         
-        # Is Robot in remot control Mode?        
         if not self.is_in_remote_control:
-            raise ImpossibleError('Robot arm is in local control mode, please change control mode on the robot controller tablet')
-        
+            raise ImpossibleError('Robot arm is in local control mode, please switch to remote control mode on the Robot controller tablet')
         
         if self.status[0] == BUSY or self.status[0] == PREPARING:
             raise IsBusyError('Robot is already executing another program')
         
-        if self.stop_State['stopped']:
-            raise IsErrorError('cannot run program when stopped')
+        if self.status[0] >= 400 and self.status[0] != STOPPED:
+            raise IsErrorError("Robot is in an error state. program '"+program_name+ "' cannot be exectuted")
         
-        if self.pause_State['paused'] and self.pause_State['interrupted_prog'] != self.loaded_prog:
-            self.pause_State = {'paused' : False, 'interrupted_prog' : self.loaded_prog}
-            raise ImpossibleError("Paused and loaded program dont match")
-                    
-        self._run_loaded_program()
-            
-    @Command(group ='control')
-    def pause(self):
-        """Pause execution of program"""
+        load_reply = str(self.communicate(f'load {program_name}'))
               
-        if self.stop_State['stopped']:
-            raise IsErrorError('cannot pause program when stopped')
         
-        if not self._program_running():
-            raise ImpossibleError('Currently not executing a program')
+        if re.match(r'Loading program: .*%s' % program_name,load_reply):
+            self._run_loaded_program()
+            self.value = program_name
+            
+           
+        elif re.match(r'File not found: .*%s' % program_name,load_reply):
+            raise InternalError('Program not found: '+program_name)
         
-        paused_struct = {'paused' : True, 'interrupted_prog' : self.value}
-        
-        play_reply  = str(self.communicate('pause'))
-        
-        if play_reply == 'Pausing program':
-            self.status = PAUSED, "Paused program execution"
+        elif re.match(r'Error while loading program: .*%s' % program_name,load_reply):
+            raise InternalError('write_target ERROR while loading program: '+ program_name)
+            
         else:
-            raise InternalError("Failed to execute: pause")
-            
+            self.status = ERROR, 'unknown answer: '+ load_reply 
+            raise InternalError('unknown answer: '+load_reply) 
         
-        self.pause_State = paused_struct
     
-    @Command(visibility = 'expert',group ='error_handling')
-    
-    def clear_error(self):
-        """Trys to Clear Errors and resets module to a working IDLE state (a subsequent reset() is recommended)"""
-        if self.status[0] == STOPPED:
-            self.stop_State = {'stopped' : False, 'interrupted_prog' : self.value}
-            self.status = IDLE
-            
-            
-            
-        if self.status[0] == LOCKED and self.safetystatus.name == 'PROTECTIVE_STOP':
-            # try unlocking protective Stop
-            unlock_reply = str(self.communicate("unlock protective stop"))
-            
-            if unlock_reply == "Protective stop releasing":
-                self.communicate('close safety popup')
-                self.status = IDLE
-                return
-                
-            raise ImpossibleError('Cannot unlock protective stop until 5s after occurrence. Always inspect cause of protective stop before unlocking')
-                
-                
-            
-        
-            
-    
-    @Command(visibility ='expert',group ='error_handling' )
-    def reset(self):
-        """Reset Robot Module (Returns to Home Position)"""
-        
-        self.write_target(RESET_PROG)
-        
-        # Robot was holding a sample before
-        if self.attached_sample._holding_sample():
-            # remove sample from Storage (robot just dropped it)
-            try:
-                self.attached_storage.mag.removeSample(self.attached_sample.value)
-            except:
-                pass # Sample was already not holding a sample
-            # set sample.value to zero --> robot not holding a Sample
-            self.attached_sample.target = 0
-            self.attached_sample.value = 0
-            
-            
+  
+
 
             
             
