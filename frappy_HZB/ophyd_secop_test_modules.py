@@ -1,21 +1,17 @@
 
-from frappy.datatypes import  EnumType, FloatRange, StringType, ArrayOf,StatusType
-
-from frappy.core import Command, Parameter, Readable,StructOf,  IntRange, Drivable
-
-from frappy.errors import    ImpossibleError
-
-from frappy.lib.enum import Enum
+import random
+import string
+import time
 
 import numpy as np
 
-import random
-import time
-import string
- 
-
-from frappy.datatypes import BoolType, EnumType, FloatRange, StringType, TupleOf
+from frappy.core import Command, Drivable, IntRange, Parameter, Readable, \
+    StructOf
+from frappy.datatypes import ArrayOf, BoolType, EnumType, FloatRange, \
+    StatusType, StringType, TupleOf
+from frappy.errors import ImpossibleError
 from frappy.lib import clamp, mkthread
+from frappy.lib.enum import Enum
 
 # test custom property (value.test can be changed in config file)
 

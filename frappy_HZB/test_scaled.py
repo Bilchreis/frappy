@@ -1,5 +1,7 @@
-from frappy.core import Readable, Parameter, ScaledInteger
 import random
+
+from frappy.core import Parameter, Readable, ScaledInteger
+
 
 class ScaleInt(Readable):
     value = Parameter(datatype=ScaledInteger(scale= 0.01,minval = 0,maxval =100,))

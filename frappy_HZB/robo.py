@@ -1,18 +1,13 @@
-from frappy.datatypes import BoolType, EnumType, FloatRange, StringType,  ArrayOf
-
-from frappy.core import StatusType ,Command, Parameter,  HasIO, StringIO,StructOf,  IDLE, BUSY, ERROR, Drivable
-
-from frappy.errors import IsErrorError, ReadFailedError, InternalError,   ImpossibleError, IsBusyError
-
-
-from frappy.lib.enum import Enum
-
-from frappy.modules import Attached
-
 import re
 
-
-
+from frappy.core import BUSY, ERROR, IDLE, Command, Drivable, HasIO, \
+    Parameter, StatusType, StringIO, StructOf
+from frappy.datatypes import ArrayOf, BoolType, EnumType, FloatRange, \
+    StringType
+from frappy.errors import ImpossibleError, InternalError, IsBusyError, \
+    IsErrorError, ReadFailedError
+from frappy.lib.enum import Enum
+from frappy.modules import Attached
 
 ROBOT_MODE_ENUM = {
     'NO_CONTROLLER'  :0,

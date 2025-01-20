@@ -1,7 +1,7 @@
 import re
 
-from frappy.core import BUSY, ERROR, IDLE, Command, Readable, HasIO, \
-    Parameter, StatusType, StringIO, StructOf
+from frappy.core import BUSY, ERROR, IDLE, Command, HasIO, Parameter, \
+    Readable, StatusType, StringIO, StructOf
 from frappy.datatypes import ArrayOf, BoolType, EnumType, FloatRange, \
     StringType
 from frappy.errors import ImpossibleError, InternalError, IsBusyError, \

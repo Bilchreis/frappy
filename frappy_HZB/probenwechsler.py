@@ -1,18 +1,14 @@
 
-from frappy.datatypes import  EnumType, FloatRange, StringType, ArrayOf,StatusType
-
-from frappy.core import Command, Parameter, Readable, HasIO,StructOf, IDLE, BUSY,  IntRange, Drivable
-
-from frappy.errors import    ImpossibleError, IsBusyError
-
-from frappy.lib.enum import Enum
-
-
-from frappy.modules import Attached
-
 import re
 import uuid
 
+from frappy.core import BUSY, IDLE, Command, Drivable, HasIO, IntRange, \
+    Parameter, Readable, StructOf
+from frappy.datatypes import ArrayOf, EnumType, FloatRange, StatusType, \
+    StringType
+from frappy.errors import ImpossibleError, IsBusyError
+from frappy.lib.enum import Enum
+from frappy.modules import Attached
 
 nsamples = 12
 

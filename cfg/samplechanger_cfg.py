@@ -27,4 +27,23 @@ Mod('hardware',
 )
 
 
+Mod('storage',
+    'frappy_HZB.storage.Storage',
+    'Hardware component that holds a number of samples in sample slots',
+    io ='robot_io',
+    a_sample = 'sample_at_measurement_position',
+    a_hardware = 'hardware',
+    storage_size = nsamples,
+    pollinterval = 1
+  
+)
 
+
+Mod('sample_at_measurement_position',
+    'frappy_HZB.special_position.special_position',
+    'Sample currently present at the measuerement position',
+    io ='robot_io',
+    a_hardware = 'robot',
+    a_storage = 'storage',
+    pollinterval = 1
+    )
