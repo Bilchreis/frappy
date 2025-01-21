@@ -10,6 +10,8 @@ from frappy.errors import ImpossibleError, IsBusyError
 from frappy.lib.enum import Enum
 from frappy.modules import Attached
 
+from frappy_HZB.samplechanger_sm import SamplechangerSM
+
 nsamples = 12
 
 EMPTY_SLOT = ""
@@ -20,6 +22,7 @@ class Magazin:
     
     def __init__(self,nSamples):
         self.samples = [""] * nSamples
+        self._next_sample_gen = self.next_sample_generator()
           
     def get_freeSlot(self):
         return self.get_index("")
@@ -57,6 +60,31 @@ class Magazin:
         else: 
             self.samples[slot] = sample_id
             
+    
+            
+    def next_sample_generator(self):
+        """
+        Generator method to yield the next non-empty sample, looping continuously.
+        If all slots are empty, it yields None once and stops.
+        """
+        n_samples = len(self.samples)
+        if all(sample == EMPTY_SLOT for sample in self.samples):
+            yield None
+            
+
+        index = 0
+        while True:
+            if self.samples[index] != EMPTY_SLOT:
+                yield self.samples[index]
+            index = (index + 1) % n_samples
+
+    def get_next_sample(self):
+        """
+        Method to return the next non-empty sample using the generator.
+        """
+        return next(self._next_sample_gen)
+
+            
 
 
             
@@ -93,28 +121,25 @@ class Storage(HasIO,Readable):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.mag = Magazin(nsamples)
+        self.a_hardware.sm.set_storage(self)
 
         
     def read_status(self):
-        robo_stat = self.a_hardware.status
+        robo_state = self.a_hardware.sm.current_state
+        
+        if robo_state == SamplechangerSM.home:
+            return IDLE, "ready for commamnds"
         
         
+        if robo_state == SamplechangerSM.loading:
+            return LOADING, "loading sample"
         
-        # Robot Arm is Busy        
-        if robo_stat[0] == BUSY:
-            if re.match(r'in\d+\.urp',self.a_hardware.loaded_prog):
-                return  LOADING, "Loading sample"
-            if re.match(r'out\d+\.urp',self.a_hardware.loaded_prog):
-                return UNLOADING , "Unloading sample"
-            
-            # Robot Running and No sample in Gripper
-            return BUSY , "Robot is in use by another module"
-        
-        if self.a_sample._holding_sample():
-            return BUSY , "Robot is in use by another module"
+        if robo_state == SamplechangerSM.unloading:
+            return UNLOADING, "unloading sample"
+
+        return BUSY, "robot is busy: " + robo_state.id
         
         
-        return robo_stat
     
     
     @Command()
@@ -136,12 +161,12 @@ class Storage(HasIO,Readable):
     @Command(result=None)
     def load(self):
         """load sample into storage"""
-     
+
+        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+            raise ImpossibleError('Robot is currently not in home position, cannot load sample')
         
-        # check if robot is ready to load sample
-        if self.a_sample._holding_sample():            
-            raise ImpossibleError('Gripper is already holding sample: ' + str(self.a_sample.value))
         
+
 
         slot = self.mag.get_freeSlot()
 
@@ -155,7 +180,7 @@ class Storage(HasIO,Readable):
         prog_name = 'in'+ str(slot)+ '.urp'
         assert(re.match(r'in\d+\.urp',prog_name))
         
-        self.a_hardware.run_program(prog_name)
+        self.a_hardware.run_program(prog_name,"load")
         
         self.a_hardware.read_status()
 
@@ -172,10 +197,10 @@ class Storage(HasIO,Readable):
     def unload(self,sample_id):
         """unload sample from storage"""
         
-        # check if robot is ready to load sample
-        if self.a_sample._holding_sample() == True:
-            raise ImpossibleError('Gripper is already holding sample' + str(self.a_sample.value)+" try unloading via 'sample' module")
-            
+
+        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+            raise ImpossibleError('Robot is currently not in home position, cannot unload sample')
+        
 
         slot = self.mag.get_index(sample_id)
 
@@ -191,7 +216,7 @@ class Storage(HasIO,Readable):
         prog_name = 'out'+ str(slot) +'.urp'
         assert(re.match(r'out\d+\.urp',prog_name))
         
-        self.a_hardware.run_program(prog_name)
+        self.a_hardware.run_program(prog_name,"unload")
         
         self.a_hardware.read_status()
 
@@ -209,16 +234,14 @@ class Storage(HasIO,Readable):
     def scan(self):
         """Scans every slot in storage"""
         
-        
-        # check if robot is ready to load sample
-        if self.a_sample._holding_sample() == True:
-            raise ImpossibleError('Gripper is already holding sample' + str(self.a_sample.value)+" try unloading via 'sample' module")
-        
+
+        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+            raise ImpossibleError('Robot is currently not in home position, cannot scan samples')
 
         # Run Robot script to scan Samples        
         prog_name = 'scan.urp'
         
-        self.a_hardware.run_program(prog_name)
+        self.a_hardware.run_program(prog_name,"scan_samples")
         
         #TODO start thread for communicationg with robot and updating storage array 
         

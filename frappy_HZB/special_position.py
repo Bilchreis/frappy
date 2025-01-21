@@ -14,8 +14,7 @@ nsamples = 12
 
 EMPTY_SLOT = ""
 
-
-      
+from frappy_HZB.samplechanger_sm import SamplechangerSM
 
 
 
@@ -28,7 +27,6 @@ class Special_Position(HasIO,Drivable):
                   MOUNTING=301,
                   UNMOUNTING = 302,
                   UNLOADING = 304,
-                  MEASURING = 303,
                   PAUSED = 305,
                   UNKNOWN = 401,
                   STOPPED = 402,
@@ -52,25 +50,36 @@ class Special_Position(HasIO,Drivable):
                        datatype=StringType(maxchars = 50),
                        default = "") 
     
+    next_sample = Parameter("ID of the next sample that should be moved to the position ",
+                            datatype=StringType(maxchars = 50),
+                            readonly = True,
+                            export = False,
+                            default = "")
+    
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.a_hardware.sm.set_special_pos(self)
     
     def write_target(self,target):               
         
         if target == "":            
             ### Unmount:
-            return self._unmount(target)
+            return self._unmount("unmount")
         else:                   
            ### Mount:
-           return self._mount(target)
+           return self._mount(target,"mount")
        
        
-    def _mount(self,target):
+    def _mount(self,target,sm_event):
         """Mount Sample to Robot arm"""
         assert(target != "")
         
-        # check if robot is currently holding a Sample from Storage
-        if self._holding_sample():
-            raise ImpossibleError('Gripper is already holding sample' + str(self.value))   
+        curr_state = self.a_hardware.sm.current_state         
         
+        if curr_state != SamplechangerSM.home or curr_state != SamplechangerSM.home_next:
+            raise ImpossibleError('Robot is currently not in home position, cannot mount sample')
+
+
         # check if sample is present in Storage
         if self.a_storage.mag.get_index(target) == None:
             raise ImpossibleError('no sample with ID: ' +str(target)+' in storage! please, check sample objects stored in storage')
@@ -82,7 +91,7 @@ class Special_Position(HasIO,Drivable):
         
         assert(re.match(r'messpos\d+\.urp',prog_name) )
         
-        self.a_hardware.run_program(prog_name)
+        self.a_hardware.run_program(prog_name,sm_event)
  
         self.status = MOUNTING , "Mounting Sample: " + str(target)
         
@@ -96,18 +105,19 @@ class Special_Position(HasIO,Drivable):
         return target
      
 
-    def _unmount(self,target):
+    def _unmount(self,sm_event,next_sample = None):
         """Unmount Sample to Robot arm"""
         
-        assert(target == "")
+
         
+        if self.a_hardware.sm.current_state != SamplechangerSM.special_pos:
+            raise ImpossibleError('Robot is currently not holding sample, cannot unmount sample')
         
-        # check if robot is ready to mount sample
-        if not self._holding_sample():
-            raise ImpossibleError('Gripper is currently not holding a sample, cannot unmount')  
+               
+
         
-        if self.a_storage.mag.get_index(target) == None:
-            raise ImpossibleError('no sample with ID: ' +str(target)+' in storage! please, check sample objects stored in storage')
+        if self.a_storage.mag.get_index(self.value) == None:
+            raise ImpossibleError('no sample with ID: ' +str(self.value)+' in storage! please, check sample objects stored in storage')
                     
         
         # Run Robot script to unmount Sample        
@@ -115,55 +125,69 @@ class Special_Position(HasIO,Drivable):
         
         assert(re.match(r'messposin\d+\.urp',prog_name) )
         
-        self.a_hardware.run_program(prog_name)
+        self.a_hardware.run_program(prog_name,sm_event)
 
         self.status = UNMOUNTING , "Unmounting Sample: " + str(self.value)
         
-        self.target = target
+        self.target = ""
         # Robot successfully unmounted the sample
-        self.value = 0
+        self.value = ""
         
         self.read_status()
         
-        return target
+        return ""
 
                   
        
 
 
     def _holding_sample(self):
-        return True if self.value == ""  else False
+        return True if self.a_hardware.sm.current_state == SamplechangerSM.special_pos  else False
 
 
         
     def read_status(self):
-            robo_stat = self.a_hardware.status
+            robo_state = self.a_hardware.sm.current_state
             
+            if robo_state == SamplechangerSM.mounting:
+                return MOUNTING , "Mounting Sample"
             
-            # Robot Idle and sample in Gripper
-            if robo_stat[0] == IDLE and self._holding_sample():
-                
-                return HOLDING_SAMPLE , "IDLE with Sample in Gripper"
+            if robo_state == SamplechangerSM.unmounting:
+                return UNMOUNTING , "Unmounting Sample"
             
-            # Robot Arm is Busy        
-            if robo_stat[0] == BUSY:
-                if re.match(r'messpos\d+\.urp',self.attached_robot.value):
-                    return  MOUNTING, "Mounting Sample"
-                if re.match(r'messposin\d+\.urp',self.attached_robot.value):
-                    return UNMOUNTING , "Unmounting Sample"
-                if re.match(r'messen+\.urp',self.attached_robot.value):
-                    return MEASURING , "Measuring Sample"
-                
-                # Robot Running and No sample in Gripper
-                return BUSY , "Robot is in use by other module"
+            if robo_state == SamplechangerSM.special_pos:
+                return HOLDING_SAMPLE , "Holding Sample"
             
-            return robo_stat
+            if robo_state == SamplechangerSM.home:
+                return IDLE , "Ready for commands"
+            
+            return BUSY, "Robot is busy: " + robo_state.id
+            
+
         
     @Command()
     def next(self):
         """  (removes (if necessary) old sample and mounts next sample, same as setting 
         the target first to '' and then to 'sampleID')"""
-        pass   
+        next_sample = self.a_storage.mag.get_next_sample()
+
+        
+        if next_sample == None:
+            raise ImpossibleError('Storage is empty, cannot mount next sample')
+        
+        self.next_sample = next_sample
+        
+        if self.a_hardware.sm.current_state == SamplechangerSM.home:
+            self._mount(next_sample, "next")
+        
+        
+        if self.a_hardware.sm.current_state == SamplechangerSM.special_pos:
+            self._unmount("next")
+            
+            
+        
+        
+        
         
     @Command()
     def stop(self,group = 'control'):
@@ -175,7 +199,6 @@ class Special_Position(HasIO,Drivable):
     
 MOUNTING         = Special_Position.Status.MOUNTING
 UNMOUNTING       = Special_Position.Status.UNMOUNTING
-MEASURING        = Special_Position.Status.MEASURING
 HOLDING_SAMPLE   = Special_Position.Status.HOLDING_SAMPLE
 PAUSED_SAMPLE    = Special_Position.Status.PAUSED
 STOPPED_SAMPLE   = Special_Position.Status.STOPPED

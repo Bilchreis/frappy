@@ -1,6 +1,12 @@
 from statemachine import StateMachine, State
 
+
+
 class SamplechangerSM(StateMachine):
+    
+    
+
+    
     home = State('home', initial= True)
     home_next = State('home after unmounting')
     
@@ -19,13 +25,19 @@ class SamplechangerSM(StateMachine):
     scanning_sample = State('scanning sample')
     moving_to_home_pos = State('moving to home position')
     
+    running_program = State('running program')
     
     
     
     mount = (
         home.to(mounting)
         | home_next.to(mounting)
-        | unmounting_next.to(mounting)        
+        | unmounting_next.to(mounting)
+                
+    )
+    
+    run_program = (
+        home.to(running_program)
     )
     
     next = (
@@ -53,6 +65,7 @@ class SamplechangerSM(StateMachine):
         | unloading.to(home)
         | unmounting_next.to(home_next)
         | moving_to_home_pos.to(home)
+        | running_program.to(home)
         
     )
     
@@ -71,8 +84,16 @@ class SamplechangerSM(StateMachine):
     finished_scanning = (
         scanning_sample.to(moving_to_home_pos)
     )
+
+    def set_storage(self, storage):
+        self.storage_module = storage
+        
+    def set_special_pos(self, special_pos):
+        self.special_pos_module = special_pos
+
+    
+    def on_enter_home_next(self):
+        self.special_pos._mount(self.special_pos.next_sample,"mount")
+        
     
 
-sm = SamplechangerSM()
-
-sm._graph().write_png("samplechanger.png")

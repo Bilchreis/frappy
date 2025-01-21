@@ -9,6 +9,8 @@ from frappy.errors import ImpossibleError, InternalError, IsBusyError, \
 from frappy.lib.enum import Enum
 from frappy.modules import Attached
 
+from frappy_HZB.samplechanger_sm import SamplechangerSM
+
 ROBOT_MODE_ENUM = {
     'NO_CONTROLLER'  :0,
     'DISCONNECTED'   :1,
@@ -46,7 +48,11 @@ class RobotIO(StringIO):
     wait_before = 0.05
 
 
-class hardware(HasIO,Readable):       
+class hardware(HasIO,Readable):    
+    
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.sm = SamplechangerSM()  
     
     ioClass = RobotIO
     
@@ -116,7 +122,18 @@ class hardware(HasIO,Readable):
                              group = 'Status Info')
 
     
+    program_running = Parameter("Program running status",
+                                datatype=BoolType,
+                                default = False,
+                                readonly = True,
+                                group = 'Status Info')
     
+    was_running = Parameter("Last Program running status",
+                                datatype=BoolType,
+                                default = False,
+                                readonly = True,
+                                export = False
+                                )
 
     
 
@@ -134,6 +151,7 @@ class hardware(HasIO,Readable):
     def doPoll(self):
         self.read_value()
         self.read_status()
+        self.read_program_running()
 
 
   
@@ -232,9 +250,7 @@ class hardware(HasIO,Readable):
         if  self.safetystatus > 1:
             return LOCKED, str(self.safetystatus.name)
                
-        if self.pause_State['paused']:
-            return PAUSED, 'Program execution paused'
-        
+       
         if self.status[0] == STOPPED:
             return self.status
                 
@@ -244,13 +260,30 @@ class hardware(HasIO,Readable):
         if self.status[0] == UNKNOWN:
             return self.status
         
+        if self.sm.current_state == SamplechangerSM.home or self.sm.current_state == SamplechangerSM.special_pos:
+            return IDLE, 'Robot is at home position'
+        else :
+            return BUSY, 'Robot is ' + self.sm.current_state.name
         
-        if self._program_running() and 'RUNNING' == self.read_robotmode():
+        
+        
 
-            
-            return BUSY, 'Program running'    	    
+
+
+    def read_program_running(self):
+        running = self._program_running()
         
-        return ROBOT_MODE_STATUS[self.robotmode.name]
+        if self.was_running and  (running == False):
+            self.sm.program_finished()
+            self.read_status()
+            
+        
+        self.was_running = running
+        
+        
+        
+        
+        return running 
 
     def _program_running(self): 
         running_reply = str(self.communicate('running')).removeprefix('Program running: ') 
@@ -281,11 +314,7 @@ class hardware(HasIO,Readable):
         elif stop_reply == 'Failed to execute: stop':
             raise InternalError("Failed to execute: stop")
             
-            
-   
-    @Command(StringType(maxchars=40),group = 'control')
-    def run_program(self,program_name):
-        """Runs the requested program on the robot"""
+    def run_program(self,program_name,sm_event):
         if self.safetystatus > SAFETYSTATUS['REDUCED']:
             raise IsErrorError('Robots is locked due to a safety related problem (' + str(self.safetystatus.name) + ") Please refer to instructions on the controller tablet or try 'clear_error' command.")
             
@@ -315,7 +344,16 @@ class hardware(HasIO,Readable):
             
         else:
             self.status = ERROR, 'unknown answer: '+ load_reply 
-            raise InternalError('unknown answer: '+load_reply) 
+            raise InternalError('unknown answer: '+load_reply)
+        
+        self.sm.send(sm_event)
+    
+   
+    @Command(StringType(maxchars=40),group = 'control')
+    def run_program_by_path(self,program_name):
+        """Runs the requested program on the robot"""
+        self.run_program(program_name,'run_program')
+
         
     
   
