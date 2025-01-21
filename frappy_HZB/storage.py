@@ -85,7 +85,8 @@ class Storage(HasIO,Readable):
     
     value = Parameter("Sample objects in storage",
                     datatype=ArrayOf(StringType(maxchars=100)),
-                    readonly = True)
+                    readonly = True,
+                    default = [""] * nsamples)
     
     
     

@@ -45,10 +45,12 @@ class Special_Position(HasIO,Drivable):
     value = Parameter("ID of the sample currently present at " +
                       "the position ('' means that the Position is empty)",
                     datatype=StringType(maxchars=50),
-                    readonly = True)
+                    readonly = True,
+                    default = "")
     
     target = Parameter("ID of the sample that should be moved to the position ",
-                       datatype=StringType(50)) 
+                       datatype=StringType(maxchars = 50),
+                       default = "") 
     
     
     def write_target(self,target):               
