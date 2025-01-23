@@ -61,24 +61,30 @@ class Special_Position(HasIO,Drivable):
         self.a_hardware.sm.set_special_pos(self)
     
     def write_target(self,target):               
+        curr_state = self.a_hardware.sm.current_state  
+        
         
         if target == "":            
             ### Unmount:
             return self._unmount("unmount")
         else:                   
            ### Mount:
-           return self._mount(target,"mount")
+           
+            if curr_state == SamplechangerSM.home_mounted:
+                return self._unmount("mount")
+            else: 
+                return self._mount(target,"mount")
        
        
-    def _mount(self,target,sm_event):
+    def _mount(self,sm_event,target):
         """Mount Sample to Robot arm"""
         assert(target != "")
         
         curr_state = self.a_hardware.sm.current_state         
         
-        if curr_state != SamplechangerSM.home or curr_state != SamplechangerSM.home_next:
+        #check if curr_state is in a list of states where mounting is possible
+        if curr_state not in [SamplechangerSM.home, SamplechangerSM.home_switch, SamplechangerSM.home_mounted]:        
             raise ImpossibleError('Robot is currently not in home position, cannot mount sample')
-
 
         # check if sample is present in Storage
         if self.a_storage.mag.get_index(target) == None:
@@ -105,15 +111,15 @@ class Special_Position(HasIO,Drivable):
         return target
      
 
-    def _unmount(self,sm_event,next_sample = None):
+    def _unmount(self,sm_event):
         """Unmount Sample to Robot arm"""
         
-
+        curr_state = self.a_hardware.sm.current_state         
         
-        if self.a_hardware.sm.current_state != SamplechangerSM.special_pos:
+        
+        if curr_state != SamplechangerSM.home_mounted:
             raise ImpossibleError('Robot is currently not holding sample, cannot unmount sample')
         
-               
 
         
         if self.a_storage.mag.get_index(self.value) == None:
@@ -139,29 +145,22 @@ class Special_Position(HasIO,Drivable):
 
                   
        
-
-
-    def _holding_sample(self):
-        return True if self.a_hardware.sm.current_state == SamplechangerSM.special_pos  else False
-
-
-        
     def read_status(self):
             robo_state = self.a_hardware.sm.current_state
             
-            if robo_state == SamplechangerSM.mounting:
+            if robo_state in [SamplechangerSM.mounting]:
                 return MOUNTING , "Mounting Sample"
             
-            if robo_state == SamplechangerSM.unmounting:
+            if robo_state in [SamplechangerSM.unmounting, SamplechangerSM.unmounting_switch]:
                 return UNMOUNTING , "Unmounting Sample"
             
-            if robo_state == SamplechangerSM.special_pos:
-                return HOLDING_SAMPLE , "Holding Sample"
+            if robo_state == SamplechangerSM.home_mounted:
+                return HOLDING_SAMPLE , "Sample in Special Position"
             
             if robo_state == SamplechangerSM.home:
                 return IDLE , "Ready for commands"
             
-            return BUSY, "Robot is busy: " + robo_state.id
+            return self.a_hardware.status
             
 
         
@@ -178,11 +177,11 @@ class Special_Position(HasIO,Drivable):
         self.next_sample = next_sample
         
         if self.a_hardware.sm.current_state == SamplechangerSM.home:
-            self._mount(next_sample, "next")
+            self._mount(next_sample,"mount")
         
         
-        if self.a_hardware.sm.current_state == SamplechangerSM.special_pos:
-            self._unmount("next")
+        if self.a_hardware.sm.current_state == SamplechangerSM.home_mounted:
+            self._unmount("mount")
             
             
         

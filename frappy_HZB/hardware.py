@@ -10,6 +10,8 @@ from frappy.lib.enum import Enum
 from frappy.modules import Attached
 
 from frappy_HZB.samplechanger_sm import SamplechangerSM
+from frappy_HZB.robot_server import RobotServer
+from frappy.lib import clamp, mkthread
 
 ROBOT_MODE_ENUM = {
     'NO_CONTROLLER'  :0,
@@ -52,7 +54,9 @@ class hardware(HasIO,Readable):
     
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
-        self.sm = SamplechangerSM()  
+        self.sm = SamplechangerSM()
+        self.robo_server = RobotServer(self.sm,self.ok_callback,self.error_callback)  
+
     
     ioClass = RobotIO
     
@@ -68,6 +72,10 @@ class hardware(HasIO,Readable):
         LOCKED = 404,        
         UNKNOWN = StatusType.UNKNOWN                
         )  #: status codes
+    
+    def initModule(self):
+        super().initModule()
+        self._thread = mkthread(self.robo_server.start_server_in_thread)
 
     status = Parameter(datatype=StatusType(Status))  # override Readable.status
 
@@ -146,12 +154,17 @@ class hardware(HasIO,Readable):
     
     
     
+    def ok_callback(self,*args,**kwargs):
+        pass
     
+    def error_callback(self,*args,**kwargs):
+        self.status = ERROR, f"{str(args[0])}"
+        
     
     def doPoll(self):
         self.read_value()
         self.read_status()
-        self.read_program_running()
+
 
 
   
@@ -249,6 +262,8 @@ class hardware(HasIO,Readable):
         self.read_safetystatus()
         if  self.safetystatus > 1:
             return LOCKED, str(self.safetystatus.name)
+        
+        
                
        
         if self.status[0] == STOPPED:
@@ -260,11 +275,15 @@ class hardware(HasIO,Readable):
         if self.status[0] == UNKNOWN:
             return self.status
         
-        if self.sm.current_state == SamplechangerSM.home or self.sm.current_state == SamplechangerSM.special_pos:
-            return IDLE, 'Robot is at home position'
-        else :
-            return BUSY, 'Robot is ' + self.sm.current_state.name
+        if self._program_running():
+            return BUSY, f'Robot is running program. Robot State: {self.sm.current_state.name}'
         
+        
+        if self.sm.current_state == SamplechangerSM.home or self.sm.current_state == SamplechangerSM.home_mounted:
+            return IDLE, 'Robot is at home position'
+        else:
+            return BUSY, f'Robot is running program. Robot State: {self.sm.current_state.name}'
+
         
         
 
@@ -274,7 +293,6 @@ class hardware(HasIO,Readable):
         running = self._program_running()
         
         if self.was_running and  (running == False):
-            self.sm.program_finished()
             self.read_status()
             
         
@@ -291,9 +309,15 @@ class hardware(HasIO,Readable):
         if running_reply == 'true':
             return True
         
-        return False	    
-        
+        return False
     
+    def ok_callback(self,**kwargs):
+        pass	    
+        
+    def error_callback(self,**kwargs):
+        pass
+    
+
 
     @Command(group ='control')
     def stop(self):

@@ -1,0 +1,4 @@
+pypylon==4.1.0
+qreader==3.14
+opencv-python-headless == 4.11.0.86
+numpy == 2.1.3

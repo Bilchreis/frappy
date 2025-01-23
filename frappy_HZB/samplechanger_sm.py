@@ -7,82 +7,107 @@ class SamplechangerSM(StateMachine):
     
 
     
-    home = State('home', initial= True)
-    home_next = State('home after unmounting')
-    
-    special_pos = State('sample_position')
+    home = State('home', initial= True)    
+    home_mounted = State('home:[mounted]')
     
     mounting = State('mounting Sample')
-    unmounting = State('unmounting Sample')
     
-    unmounting_next = State('unmounting with mounting next sample')
+    unmounting = State('unmounting Sample')
+    unmounting_switch = State('unmounting Sample:[switch]')
+    
+
     
     loading = State('loading sample')
+    loading_mounted = State('loading:[mounted]')
+    
     unloading = State('unloading sample')
+    unloading_mounted = State('unloading:[mounted]')
     
 
     moving_to_scan_pos = State('moving to scan position') 
+    moving_to_scan_pos_mounted = State('moving to scan position:[mounted]')
+    
     scanning_sample = State('scanning sample')
+    scanning_sample_mounted = State('scanning sample:[mounted]')
+    
     moving_to_home_pos = State('moving to home position')
+    moving_to_home_mounted_pos = State('moving to home position:[mounted]')
+    
     
     running_program = State('running program')
+
+    
+    home_switch = State('home:[switch]')
     
     
     
     mount = (
         home.to(mounting)
-        | home_next.to(mounting)
-        | unmounting_next.to(mounting)
+        | home_mounted.to(unmounting_switch)
+        | home_switch.to(mounting)
+        
+
                 
     )
+
+    
+
     
     run_program = (
         home.to(running_program)
+
     )
     
-    next = (
-        home.to(mounting)
-        | special_pos.to(unmounting_next)
-    )
     
     
     unmount = (
-        special_pos.to(unmounting)
+        home_mounted.to(unmounting)
     )
+    
+    
     
     unload = (
         home.to(unloading)
+        | home_mounted.to(unloading_mounted)
     )
     
     load = (
         home.to(loading)
+        | home_mounted.to(loading_mounted)
     )
     
     program_finished = (
-        mounting.to(special_pos)
-        | unmounting.to(home)
+        unmounting.to(home)
+        | mounting.to(home_mounted)
         | loading.to(home)
+        | loading_mounted.to(home_mounted)
         | unloading.to(home)
-        | unmounting_next.to(home_next)
+        | unloading_mounted.to(home_mounted)
         | moving_to_home_pos.to(home)
+        | moving_to_home_mounted_pos.to(home_mounted)
         | running_program.to(home)
+        | unmounting_switch.to(home_switch)
         
     )
     
     scan_samples = (
         home.to(moving_to_scan_pos)
+        | home_mounted.to(moving_to_scan_pos_mounted)
     )
     
     at_scan_pos = (
         moving_to_scan_pos.to(scanning_sample)
+        | moving_to_scan_pos_mounted.to(scanning_sample_mounted)
     )
     
     next_slot = (
         scanning_sample.to(moving_to_scan_pos)
+        | scanning_sample_mounted.to(moving_to_scan_pos_mounted)
     )
     
     finished_scanning = (
         scanning_sample.to(moving_to_home_pos)
+        | scanning_sample_mounted.to(moving_to_home_mounted_pos)
     )
 
     def set_storage(self, storage):
@@ -92,8 +117,11 @@ class SamplechangerSM(StateMachine):
         self.special_pos_module = special_pos
 
     
-    def on_enter_home_next(self):
+    def on_enter_home_switch(self):
         self.special_pos._mount(self.special_pos.next_sample,"mount")
         
     
 
+#sm = SamplechangerSM()
+
+#sm._graph().write_png('samplechanger.png')

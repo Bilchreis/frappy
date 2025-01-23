@@ -12,7 +12,7 @@ from frappy.modules import Attached
 
 from frappy_HZB.samplechanger_sm import SamplechangerSM
 
-nsamples = 12
+nsamples = 6
 
 EMPTY_SLOT = ""
 
@@ -55,10 +55,8 @@ class Magazin:
         return self.samples[slot]      
     
     def updateSample(self,slot,sample_id):
-        if self.samples[slot] != EMPTY_SLOT:
-            raise Exception("no sample present at slot: "+ str(slot))
-        else: 
-            self.samples[slot] = sample_id
+        
+        self.samples[slot] = sample_id
             
     
             
@@ -122,24 +120,29 @@ class Storage(HasIO,Readable):
         super().__init__(*args,**kwargs)
         self.mag = Magazin(nsamples)
         self.a_hardware.sm.set_storage(self)
+        self.a_hardware.robo_server.set_qr_code_callback(self.set_new_sampleID)
 
+        
+    def read_value(self):
+        return self.mag.samples    
         
     def read_status(self):
         robo_state = self.a_hardware.sm.current_state
         
-        if robo_state == SamplechangerSM.home:
+        if robo_state in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
             return IDLE, "ready for commamnds"
         
         
-        if robo_state == SamplechangerSM.loading:
+        if robo_state in [SamplechangerSM.loading,SamplechangerSM.loading_mounted]:
             return LOADING, "loading sample"
         
-        if robo_state == SamplechangerSM.unloading:
+        if robo_state in  [SamplechangerSM.unloading,SamplechangerSM.unloading_mounted]:
             return UNLOADING, "unloading sample"
 
         return BUSY, "robot is busy: " + robo_state.id
         
-        
+    def set_new_sampleID(self,slot,sample_id):
+        self.mag.updateSample(slot,sample_id)
     
     
     @Command()
@@ -162,7 +165,7 @@ class Storage(HasIO,Readable):
     def load(self):
         """load sample into storage"""
 
-        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+        if self.a_hardware.sm.current_state not in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
             raise ImpossibleError('Robot is currently not in home position, cannot load sample')
         
         
@@ -198,7 +201,7 @@ class Storage(HasIO,Readable):
         """unload sample from storage"""
         
 
-        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+        if self.a_hardware.sm.current_state not in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
             raise ImpossibleError('Robot is currently not in home position, cannot unload sample')
         
 
@@ -235,11 +238,11 @@ class Storage(HasIO,Readable):
         """Scans every slot in storage"""
         
 
-        if self.a_hardware.sm.current_state != SamplechangerSM.home:
+        if self.a_hardware.sm.current_state not in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
             raise ImpossibleError('Robot is currently not in home position, cannot scan samples')
 
         # Run Robot script to scan Samples        
-        prog_name = 'scan.urp'
+        prog_name = 'Scan_mag.urp'
         
         self.a_hardware.run_program(prog_name,"scan_samples")
         

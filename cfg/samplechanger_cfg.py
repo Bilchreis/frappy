@@ -8,7 +8,7 @@ Node('sample_changer.HZB',  # a globally unique identification
 Mod('robot_io',  # the name of the module
     'frappy_HZB.hardware.RobotIO',  # the class used for communication
     'TCP communication to robot Dashboard Server Interface',  # a description
-    uri='tcp://localhost:29999',  # the serial connection
+    uri='tcp://192.168.3.5:29999',  # the serial connection
 )    
     
 Mod('hardware',
