@@ -8,26 +8,47 @@ from qreader import QReader
 
 
 class RobotServer:
-    def __init__(self,samplechanger_sm:SamplechangerSM, ok_callback=None, error_callback=None):
+    def __init__(self,samplechanger_sm:SamplechangerSM, callbacks = [],logger=None):
         self.samplechanger_sm = samplechanger_sm
-        self.ok_callback = ok_callback
-        self.error_callback = error_callback
+        self.callbacks = callbacks
         #self.qcd = cv2.QRCodeDetector()
         self.qreader = QReader()
+        self.log = logger
         
         try:
             tl_factory = pylon.TlFactory.GetInstance()
             camera = pylon.InstantCamera()
             camera.Attach(tl_factory.CreateFirstDevice())
-            print("Camera attached")
+
+            self.log.info("Camera attached")
             
             self.camera = camera
         except Exception as e:
-            print(e)
+            self.log.error(e)
             self.camera = None
             
 
-        
+    def run_OK_callbacks(self,cb_arg = None):        
+        for callback_tuple in self.callbacks:
+            match callback_tuple:
+                case ('ok',self.samplechanger_sm.current_state.value, callback):
+                    if cb_arg is not None:
+                        callback(cb_arg)
+                    else:
+                        callback()
+                        
+
+    def run_error_callbacks(self,cb_arg = None):        
+        for callback_tuple in self.callbacks:
+            match callback_tuple:
+                case ('error',self.samplechanger_sm.current_state.value, callback):
+                    if cb_arg is not None:
+                        callback(cb_arg)
+                    else:
+                        callback()
+
+    def add_callbacks(self,callbacks):
+        self.callbacks.extend(callbacks)
           
 
     def set_qr_code_callback(self, qr_code_callback):
@@ -46,24 +67,22 @@ class RobotServer:
         # if there is a QR code
         # print the data
         if sample_ids != ():
-            print("QRCode data:")
-            print(sample_ids[0])
+            self.log.info(f"QRCode data: {sample_ids[0]}")
             return sample_ids[0]
         
         #try decoding inverted image
         inv_img = cv2.bitwise_not(img)
         #cv2.imwrite(filename, inv_img)
-        print("try decoding inverted image")
+        self.log.info("try decoding inverted image")
         sample_ids = self.qreader.detect_and_decode(image=inv_img)
         
         # if there is a QR code
         # print the data
         if sample_ids != ():
-            print("QRCode data:")
-            print(sample_ids[0])
+            self.log.info(f"QRCode data: {sample_ids[0]}")
             return sample_ids[0]
             
-        print("Could not decode QR Code") 
+        self.log.error("No QR code found") 
         return None
     
     def grab_img(self,i=0):
@@ -75,11 +94,7 @@ class RobotServer:
         self.camera.StartGrabbing(1)
         grab = self.camera.RetrieveResult(2000, pylon.TimeoutHandling_Return)
         if grab.GrabSucceeded():
-            img = grab.GetArray()
-            print(f'Size of image: {img.shape}')
-            
-
-            
+            img = grab.GetArray()           
             
         
         self.camera.Close()
@@ -90,7 +105,8 @@ class RobotServer:
     async def handle_client(self,reader:asyncio.StreamReader, writer:asyncio.StreamWriter):
         """Handles an individual client connection."""
         addr = writer.get_extra_info('peername')
-        print(f"New connection from {addr}")
+        self.log.info(f"New connection from Robot: {addr}")
+        
         
         
 
@@ -103,16 +119,16 @@ class RobotServer:
                 message = data.decode().strip()
                 
                 if not data:  # Connection closed
-                    print(f"Connection closed by {addr}")
+                    self.log.info(f"Connection closed by {addr}")
                     break
                 
-                print(f"Received line: '{message}' from {addr}")
+                self.log.debug(f"Received line: '{message}' from {addr}")
                 
                 
                 match message.split(":"):
                     case ['QR', slot_nr]:
                         self.samplechanger_sm.at_scan_pos()
-                        print(f'Camera at QR code: {slot_nr}')
+                        self.log.info(f'Camera at QR code: {slot_nr}')
                         
                         #await asyncio.sleep(0.5)
                         
@@ -135,21 +151,21 @@ class RobotServer:
                         await writer.drain()  # Ensure data is sent
 
                     case ['ok']:
-                        print('Received OK')
-                        self.ok_callback()
+                        self.log.info('Received OK')
+                        self.run_OK_callbacks()
                         self.samplechanger_sm.program_finished()
                         
                     case ['error', error_message]:
-                        print(f'Received error: {error_message}')
-                        self.error_callback(error_message)
+                        self.log.error(f'Received error: {error_message}')
+                        self.run_error_callbacks(error_message)
                     case ['error']:
-                        print('Received UNKNOWN error')
-                        self.error_callback('')
+                        self.log.error('Received UNKNOWN error')
+                        self.run_error_callbacks()
                         
                 
 
         except asyncio.CancelledError:
-            print(f"Closing connection with {addr}")
+            self.log.error(f"Closing connection with {addr}")
         finally:
             writer.close()
             await writer.wait_closed()
@@ -157,7 +173,7 @@ class RobotServer:
     async def run_server(self,host='0.0.0.0', port=50030):
         """Creates and runs the asyncio socket server."""
         server = await asyncio.start_server(self.handle_client, host, port)
-        print(f'Server running on {host}:{port}')
+        self.log.info(f'Server running on {host}:{port}')
         async with server:
             await server.serve_forever()
 

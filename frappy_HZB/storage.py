@@ -121,7 +121,20 @@ class Storage(HasIO,Readable):
         self.mag = Magazin(nsamples)
         self.a_hardware.sm.set_storage(self)
         self.a_hardware.robo_server.set_qr_code_callback(self.set_new_sampleID)
+        
+        self.inserted_sample = None
+        self.unloaded_sample = None
 
+        self.callbacks = [
+            ('ok','load',self.load_ok_callback),
+            ('error','load',self.load_error_callback),
+            ('ok','unload',self.unload_ok_callback),
+            ('error','unload',self.unload_error_callback),
+            ('ok','scan_samples',self.scan_ok_callback),
+            ('error','scan_samples',self.scan_error_callback),
+        ]
+        
+        self.a_hardware.robo_server.add_callbacks(self.callbacks)
         
     def read_value(self):
         return self.mag.samples    
@@ -158,8 +171,14 @@ class Storage(HasIO,Readable):
         self.value = [""] * nsamples        
         
         
+    def load_ok_callback(self):
+        
+        self.mag.insertSample("@" + str(self.inserted_sample))
+        return
     
-    
+    def load_error_callback(self,error_message= None):
+        self.a_hardware.error_occured(error_message)
+        self.read_status()
     
     @Command(result=None)
     def load(self):
@@ -183,6 +202,7 @@ class Storage(HasIO,Readable):
         prog_name = 'in'+ str(slot)+ '.urp'
         assert(re.match(r'in\d+\.urp',prog_name))
         
+        self.inserted_sample = f'@{str(slot)}'
         self.a_hardware.run_program(prog_name,"load")
         
         self.a_hardware.read_status()
@@ -190,15 +210,28 @@ class Storage(HasIO,Readable):
         self.read_status()
         
         # Insert new Sample in Storage Array (it is assumed that the robot programm executed successfully)
-        self.mag.insertSample("@" + str(slot))
+        
 
         return
     
     
-
+    def unload_ok_callback(self):
+        try:
+            self.mag.removeSample(self.unloaded_sample)
+        except:
+            raise ImpossibleError( "No sample present: " + str(self.unloaded_sample))        
+           
+        return
+    
+    def unload_error_callback(self,error_message= None):
+        self.a_hardware.error_occured(error_message)
+        self.read_status()
+        
+        
     @Command(StringType(maxchars=50),result=None)    
     def unload(self,sample_id):
         """unload sample from storage"""
+
         
 
         if self.a_hardware.sm.current_state not in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
@@ -207,7 +240,7 @@ class Storage(HasIO,Readable):
 
         slot = self.mag.get_index(sample_id)
 
-        # check if Sample is in Magazined
+        # check if Sample is in Magazine
         if slot == None:
             raise ImpossibleError( "No sample with id "+str(sample_id)+" present Magazine " )
         
@@ -219,19 +252,23 @@ class Storage(HasIO,Readable):
         prog_name = 'out'+ str(slot) +'.urp'
         assert(re.match(r'out\d+\.urp',prog_name))
         
+        self.unloaded_sample = sample_id
+        
         self.a_hardware.run_program(prog_name,"unload")
         
         self.a_hardware.read_status()
 
         self.read_status()
 
-        try:
-            self.mag.removeSample(sample_id)
-        except:
-            raise ImpossibleError( "No sample present: " + str(sample_id))
-        
-           
         return
+    
+    
+    def scan_ok_callback(self):
+        return
+    
+    def scan_error_callback(self,error_message= None):
+        self.a_hardware.error_occured(error_message)
+        self.read_status()
             
     @Command(result=None)        
     def scan(self):

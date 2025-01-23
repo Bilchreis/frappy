@@ -59,6 +59,14 @@ class Special_Position(HasIO,Drivable):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.a_hardware.sm.set_special_pos(self)
+        self.callbacks = [
+            ('ok','mount',self.mount_ok_callback),
+            ('ok','unmount',self.unmount_ok_callback),
+            ('error','mount',self.mount_error_callback),
+            ('error','unmount',self.unmount_error_callback)
+        ]
+        
+        self.a_hardware.robo_server.add_callbacks(self.callbacks)
     
     def write_target(self,target):               
         curr_state = self.a_hardware.sm.current_state  
@@ -74,7 +82,25 @@ class Special_Position(HasIO,Drivable):
                 return self._unmount("mount")
             else: 
                 return self._mount(target,"mount")
-       
+    
+    def mount_error_callback(self,error_message= None):
+        self.a_hardware.error_occured(error_message)
+        self.read_status()
+    
+    
+    def mount_ok_callback(self):
+        # Robot successfully mounting the sample
+        self.value = self.target
+    
+    def unmount_error_callback(self,error_message= None):
+        self.a_hardware.error_occured(error_message)
+        self.read_status()
+    
+    def unmount_ok_callback(self):
+        # Robot successfully unmounted the sample
+        self.value = ""
+    
+    
        
     def _mount(self,sm_event,target):
         """Mount Sample to Robot arm"""
@@ -103,12 +129,11 @@ class Special_Position(HasIO,Drivable):
         
         self.target = target
         
-        # Robot successfully mounting the sample
-        self.value = self.target
+
         
         self.read_status()
         
-        return target
+        return self.target
      
 
     def _unmount(self,sm_event):
@@ -136,12 +161,11 @@ class Special_Position(HasIO,Drivable):
         self.status = UNMOUNTING , "Unmounting Sample: " + str(self.value)
         
         self.target = ""
-        # Robot successfully unmounted the sample
-        self.value = ""
+
         
         self.read_status()
         
-        return ""
+        return self.target
 
                   
        
@@ -162,6 +186,8 @@ class Special_Position(HasIO,Drivable):
             
             return self.a_hardware.status
             
+
+    
 
         
     @Command()

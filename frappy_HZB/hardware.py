@@ -55,12 +55,17 @@ class hardware(HasIO,Readable):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.sm = SamplechangerSM()
-        self.robo_server = RobotServer(self.sm,self.ok_callback,self.error_callback)  
+        self.callbacks = [
+            ('ok','run_program',self.run_program_ok_callback),
+            ('error', 'run_program',self.run_program_error_callback)
+        ]
+        self.robo_server = RobotServer(self.sm,self.callbacks,logger=self.log)  
+        
 
     
     ioClass = RobotIO
     
-    Status = Enum(
+    Status = Enum( 
         Readable.Status,
         DISABLED = StatusType.DISABLED,
         STANDBY = StatusType.STANDBY,
@@ -151,15 +156,9 @@ class hardware(HasIO,Readable):
                                      readonly = True,
                                      default = False,
                                      group = 'Status Info')
+       
     
-    
-    
-    def ok_callback(self,*args,**kwargs):
-        pass
-    
-    def error_callback(self,*args,**kwargs):
-        self.status = ERROR, f"{str(args[0])}"
-        
+       
     
     def doPoll(self):
         self.read_value()
@@ -311,12 +310,7 @@ class hardware(HasIO,Readable):
         
         return False
     
-    def ok_callback(self,**kwargs):
-        pass	    
-        
-    def error_callback(self,**kwargs):
-        pass
-    
+   
 
 
     @Command(group ='control')
@@ -372,6 +366,24 @@ class hardware(HasIO,Readable):
         
         self.sm.send(sm_event)
     
+
+    def error_occurred(self,error_message):
+        if error_message:
+            self.status = ERROR, f'Reason:{error_message}'
+        else:
+            self.status = ERROR, 'An unknown error occurred' 
+        
+        self.read_status()
+   
+    def run_program_ok_callback(self):
+        # Robot successfully unmounted the sample
+        pass
+    
+    def run_program_error_callback(self,message):
+        # Error while running program
+        self.status = ERROR, message
+        self.read_status()
+   
    
     @Command(StringType(maxchars=40),group = 'control')
     def run_program_by_path(self,program_name):
