@@ -7,34 +7,34 @@ class SamplechangerSM(StateMachine):
     
 
     
-    home = State('home', initial= True)    
-    home_mounted = State('home:[mounted]')
+    home = State('home', initial= True, value = 'home')    
+    home_mounted = State('home:[mounted]', value = 'home_mounted')
     
-    mounting = State('mounting Sample')
+    mounting = State('mounting Sample','mount')
     
-    unmounting = State('unmounting Sample',)
-    unmounting_switch = State('unmounting Sample:[switch]')
+    unmounting = State('unmounting Sample','unmount')
+    unmounting_switch = State('unmounting Sample:[switch]', 'unmount_switch')
     
 
     
-    loading = State('loading sample')
-    loading_mounted = State('loading:[mounted]')
+    loading = State('loading sample','load')
+    loading_mounted = State('loading:[mounted]', 'load_mounted')
     
     unloading = State('unloading sample','unload')
-    unloading_mounted = State('unloading:[mounted]')
+    unloading_mounted = State('unloading:[mounted]','unload_mounted')
     
 
-    moving_to_scan_pos = State('moving to scan position') 
-    moving_to_scan_pos_mounted = State('moving to scan position:[mounted]')
+    moving_to_scan_pos = State('moving to scan position','move_to_scan_pos') 
+    moving_to_scan_pos_mounted = State('moving to scan position:[mounted]','move_to_scan_pos_mounted')
     
-    scanning_sample = State('scanning sample')
-    scanning_sample_mounted = State('scanning sample:[mounted]')
+    scanning_sample = State('scanning sample','scan_sample')
+    scanning_sample_mounted = State('scanning sample:[mounted]', 'scan_sample_mounted')
     
-    moving_to_home_pos = State('moving to home position')
-    moving_to_home_mounted_pos = State('moving to home position:[mounted]')
+    moving_to_home_pos = State('moving to home position','move_to_home_pos')
+    moving_to_home_mounted_pos = State('moving to home position:[mounted]', 'move_to_home_mounted_pos')
     
-    presence_detection = State('presence detection')
-    presence_detection_mounted = State('presence detection:[mounted]')
+    presence_detection = State('presence detection','presence_detection')
+    presence_detection_mounted = State('presence detection:[mounted]', 'presence_detection_mounted')
     
     
 
@@ -44,7 +44,7 @@ class SamplechangerSM(StateMachine):
     running_program = State('running program','run_program')
 
     
-    home_switch = State('home:[switch]')
+    home_switch = State('home:[switch]', value = 'home_switch')
     
     
     

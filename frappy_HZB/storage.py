@@ -84,16 +84,6 @@ class Magazin:
 
             
             
-    def detection_callback(self,slot,detected):
-        
-        print(f"Slot {slot} detected: {detected}")
-        if detected == 0:
-            self.samples[slot] = ""
-        
-        if detected == 1 and self.samples[slot] == "":
-
-            self.samples[slot] = "@" + str(slot)
-
 
 
             
@@ -132,7 +122,7 @@ class Storage(HasIO,Readable):
         self.mag = Magazin(nsamples)
         self.a_hardware.sm.set_storage(self)
         self.a_hardware.robo_server.set_qr_code_callback(self.set_new_sampleID)
-        self.a_hardware.robo_server.set_presence_detection_callback(self.mag.detection_callback)
+        self.a_hardware.robo_server.set_presence_detection_callback(self.sample_presence_detected)
         
         
         self.inserted_sample = None
@@ -140,11 +130,17 @@ class Storage(HasIO,Readable):
 
         self.callbacks = [
             ('ok','load',self.load_ok_callback),
+            ('ok','load_mounted',self.load_ok_callback),
             ('error','load',self.load_error_callback),
+            ('error','load_mounted',self.load_error_callback),
             ('ok','unload',self.unload_ok_callback),
+            ('ok','unload_mounted',self.unload_ok_callback),
             ('error','unload',self.unload_error_callback),
-            ('ok','scan_samples',self.scan_ok_callback),
+            ('error','unload_mounted',self.unload_error_callback),
+            ('ok','scan_samples',self.scan_ok_callback)
+            ('ok','scan_samples_mounted',self.scan_ok_callback),
             ('error','scan_samples',self.scan_error_callback),
+            ('error','scan_samples_mounted',self.scan_error_callback),
         ]
         
         self.a_hardware.robo_server.add_callbacks(self.callbacks)
@@ -168,7 +164,26 @@ class Storage(HasIO,Readable):
         return BUSY, "robot is busy: " + robo_state.id
         
     def set_new_sampleID(self,slot,sample_id):
+       
         self.mag.updateSample(slot,sample_id)
+        
+    def sample_presence_detected(self,slot,detected):
+        # sample is currently not in magazine
+        
+        mounted_sample = self.a_sample.value          
+        
+        if mounted_sample and self.mag.get_index(mounted_sample) == slot and detected == 0: 
+            return
+        
+        # no ssample in slot
+        if detected == 0:                   
+            self.mag.samples[slot] = ""
+
+        
+        if detected == 1 and self.samples[slot] == "":
+
+            self.samples[slot] = "@" + str(slot)
+        
     
     
     @Command()

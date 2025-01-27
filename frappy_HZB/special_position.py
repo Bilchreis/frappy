@@ -62,8 +62,10 @@ class Special_Position(HasIO,Drivable):
         self.callbacks = [
             ('ok','mount',self.mount_ok_callback),
             ('ok','unmount',self.unmount_ok_callback),
+            ('ok','unmount_switch',self.unmount_ok_callback),
             ('error','mount',self.mount_error_callback),
-            ('error','unmount',self.unmount_error_callback)
+            ('error','unmount',self.unmount_error_callback),
+            ('error','unmount_switch',self.unmount_error_callback),
         ]
         
         self.a_hardware.robo_server.add_callbacks(self.callbacks)
