@@ -67,21 +67,25 @@ class Special_Position(HasIO,Drivable):
         ]
         
         self.a_hardware.robo_server.add_callbacks(self.callbacks)
+        
+    def read_value(self):
+        return self.value
+    
+    def read_target(self):  
+        return self.target
     
     def write_target(self,target):               
-        curr_state = self.a_hardware.sm.current_state  
+
         
+        print(f"target: {target}, type: {type(target)}")
         
-        if target == "":            
+        if not target:      
             ### Unmount:
             return self._unmount("unmount")
         else:                   
-           ### Mount:
-           
-            if curr_state == SamplechangerSM.home_mounted:
-                return self._unmount("mount")
-            else: 
-                return self._mount(target,"mount")
+           ### Mount: 
+           #TODO Sample switch
+            return self._mount("mount",target)
     
     def mount_error_callback(self,error_message= None):
         self.a_hardware.error_occured(error_message)
@@ -90,7 +94,10 @@ class Special_Position(HasIO,Drivable):
     
     def mount_ok_callback(self):
         # Robot successfully mounting the sample
+        print("mount ok")
         self.value = self.target
+        self.read_target()
+        self.read_value()
     
     def unmount_error_callback(self,error_message= None):
         self.a_hardware.error_occured(error_message)
@@ -98,15 +105,20 @@ class Special_Position(HasIO,Drivable):
     
     def unmount_ok_callback(self):
         # Robot successfully unmounted the sample
+        print("unmount ok")
         self.value = ""
+        self.read_value()
     
     
        
     def _mount(self,sm_event,target):
         """Mount Sample to Robot arm"""
+        
         assert(target != "")
         
-        curr_state = self.a_hardware.sm.current_state         
+        curr_state = self.a_hardware.sm.current_state   
+        
+        self.log.info(f"requested sample: {target} to be mounted")      
         
         #check if curr_state is in a list of states where mounting is possible
         if curr_state not in [SamplechangerSM.home, SamplechangerSM.home_switch, SamplechangerSM.home_mounted]:        
@@ -116,12 +128,12 @@ class Special_Position(HasIO,Drivable):
         if self.a_storage.mag.get_index(target) == None:
             raise ImpossibleError('no sample with ID: ' +str(target)+' in storage! please, check sample objects stored in storage')
               
-    
+        slot = self.a_storage.mag.get_index(target) +1
      
         # Run Robot script to mount actual Sample        
-        prog_name = 'messpos'+ str(target) + '.urp'
+        prog_name = 'messin'+ str(slot) + '.urp'
         
-        assert(re.match(r'messpos\d+\.urp',prog_name) )
+        assert(re.match(r'messin\d+\.urp',prog_name) )
         
         self.a_hardware.run_program(prog_name,sm_event)
  
@@ -139,6 +151,8 @@ class Special_Position(HasIO,Drivable):
     def _unmount(self,sm_event):
         """Unmount Sample to Robot arm"""
         
+        self.log.info(f"requested sample: {self.value} to be unmounted")
+        
         curr_state = self.a_hardware.sm.current_state         
         
         
@@ -150,11 +164,15 @@ class Special_Position(HasIO,Drivable):
         if self.a_storage.mag.get_index(self.value) == None:
             raise ImpossibleError('no sample with ID: ' +str(self.value)+' in storage! please, check sample objects stored in storage')
                     
+                    
+        slot = self.a_storage.mag.get_index(self.value) +1
+        
+        print(f"slot: {slot}")
         
         # Run Robot script to unmount Sample        
-        prog_name = 'messposin'+ str(self.value) + '.urp'
+        prog_name = 'messout'+ str(slot) + '.urp'
         
-        assert(re.match(r'messposin\d+\.urp',prog_name) )
+        assert(re.match(r'messout\d+\.urp',prog_name) )
         
         self.a_hardware.run_program(prog_name,sm_event)
 
@@ -171,6 +189,7 @@ class Special_Position(HasIO,Drivable):
        
     def read_status(self):
             robo_state = self.a_hardware.sm.current_state
+            
             
             if robo_state in [SamplechangerSM.mounting]:
                 return MOUNTING , "Mounting Sample"
@@ -203,7 +222,7 @@ class Special_Position(HasIO,Drivable):
         self.next_sample = next_sample
         
         if self.a_hardware.sm.current_state == SamplechangerSM.home:
-            self._mount(next_sample,"mount")
+            self._mount("mount",next_sample)
         
         
         if self.a_hardware.sm.current_state == SamplechangerSM.home_mounted:

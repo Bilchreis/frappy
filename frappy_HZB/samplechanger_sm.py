@@ -1,4 +1,4 @@
-from statemachine import StateMachine, State
+from statemachine import StateMachine, State, Event
 
 
 
@@ -10,28 +10,35 @@ class SamplechangerSM(StateMachine):
     home = State('home', initial= True)    
     home_mounted = State('home:[mounted]')
     
-    mounting = State('mounting Sample','mount')
+    mounting = State('mounting Sample')
     
-    unmounting = State('unmounting Sample','unmount')
-    unmounting_switch = State('unmounting Sample:[switch]', 'unmount')
+    unmounting = State('unmounting Sample',)
+    unmounting_switch = State('unmounting Sample:[switch]')
     
 
     
-    loading = State('loading sample','load')
-    loading_mounted = State('loading:[mounted]', 'load')
+    loading = State('loading sample')
+    loading_mounted = State('loading:[mounted]')
     
     unloading = State('unloading sample','unload')
-    unloading_mounted = State('unloading:[mounted]', 'unload')
+    unloading_mounted = State('unloading:[mounted]')
     
 
-    moving_to_scan_pos = State('moving to scan position','scan_samples') 
-    moving_to_scan_pos_mounted = State('moving to scan position:[mounted]', 'scan_samples')
+    moving_to_scan_pos = State('moving to scan position') 
+    moving_to_scan_pos_mounted = State('moving to scan position:[mounted]')
     
-    scanning_sample = State('scanning sample','scan_samples')
-    scanning_sample_mounted = State('scanning sample:[mounted]', 'scan_samples')
+    scanning_sample = State('scanning sample')
+    scanning_sample_mounted = State('scanning sample:[mounted]')
     
-    moving_to_home_pos = State('moving to home position','scan_samples')
-    moving_to_home_mounted_pos = State('moving to home position:[mounted]', 'scan_samples')
+    moving_to_home_pos = State('moving to home position')
+    moving_to_home_mounted_pos = State('moving to home position:[mounted]')
+    
+    presence_detection = State('presence detection')
+    presence_detection_mounted = State('presence detection:[mounted]')
+    
+    
+
+    
     
     
     running_program = State('running program','run_program')
@@ -103,11 +110,20 @@ class SamplechangerSM(StateMachine):
     next_slot = (
         scanning_sample.to(moving_to_scan_pos)
         | scanning_sample_mounted.to(moving_to_scan_pos_mounted)
+        | presence_detection.to.itself()
+        | presence_detection_mounted.to.itself()
     )
     
     finished_scanning = (
-        scanning_sample.to(moving_to_home_pos)
-        | scanning_sample_mounted.to(moving_to_home_mounted_pos)
+        scanning_sample.to(presence_detection)
+        | scanning_sample_mounted.to(presence_detection_mounted)
+    )
+    
+
+    
+    finished_presence_detection = (
+        presence_detection.to(moving_to_home_pos)
+        | presence_detection_mounted.to(moving_to_home_mounted_pos)
     )
 
     def set_storage(self, storage):
@@ -118,7 +134,13 @@ class SamplechangerSM(StateMachine):
 
     
     def on_enter_home_switch(self):
-        self.special_pos_module._mount(self.special_pos_module.next_sample,"mount")
+        self.special_pos_module._mount("mount",self.special_pos_module.next_sample)
+        
+    def on_transition(self, event_data, event: Event):
+        # The `event` parameter can be declared as `str` or `Event`, since `Event` is a subclass of `str`
+        # Note also that in this example, we're using `on_transition` instead of `on_cycle`, as this
+        # binds the action to run for every transition instead of a specific event ID.
+        print(f'State: {self.current_state.id} incoming Event: {event.id}' )
         
     
 

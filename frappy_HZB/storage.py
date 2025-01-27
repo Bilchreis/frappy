@@ -83,6 +83,17 @@ class Magazin:
         return next(self._next_sample_gen)
 
             
+            
+    def detection_callback(self,slot,detected):
+        
+        print(f"Slot {slot} detected: {detected}")
+        if detected == 0:
+            self.samples[slot] = ""
+        
+        if detected == 1 and self.samples[slot] == "":
+
+            self.samples[slot] = "@" + str(slot)
+
 
 
             
@@ -121,6 +132,8 @@ class Storage(HasIO,Readable):
         self.mag = Magazin(nsamples)
         self.a_hardware.sm.set_storage(self)
         self.a_hardware.robo_server.set_qr_code_callback(self.set_new_sampleID)
+        self.a_hardware.robo_server.set_presence_detection_callback(self.mag.detection_callback)
+        
         
         self.inserted_sample = None
         self.unloaded_sample = None
