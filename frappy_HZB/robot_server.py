@@ -6,6 +6,25 @@ import cv2
 from qreader import QReader
 
 
+def decode_img(img):
+    
+   
+    qreader = QReader()
+    # detect and decode
+    sample_ids = qreader.detect_and_decode(image=img)
+    #retval, decoded_info, points, straight_qrcode = self.qcd.detectAndDecodeMulti(img)
+    # if there is a QR code
+    # print the data
+
+    
+    if sample_ids != () and sample_ids != (None,):
+        
+        #print(f"callback input: {sample_ids[0]}")
+        return(sample_ids[0])
+    
+    #raise Exception('could not detect qrcode')
+    return None
+
 
 class RobotServer:
     def __init__(self,samplechanger_sm:SamplechangerSM, callbacks = [],logger=None):
@@ -58,40 +77,34 @@ class RobotServer:
         
     def set_presence_detection_callback(self, presence_detection_callback):
         self.presence_detection_callback = presence_detection_callback
-        
-    def decode_img(self,img,i= 0):         
-
-        # initialize the cv2 QRCode detector
-        #crop_img = img#[500:2200,img = cv2.bitwise_not(thresh, thresh) 500:2200]
-        #filename = "saved_qr_img_%d.png" % i
-        #cv2.imwrite(filename, img)
-        
-        # detect and decode
-        sample_ids = self.qreader.detect_and_decode(image=img)
-        #retval, decoded_info, points, straight_qrcode = self.qcd.detectAndDecodeMulti(img)
-        # if there is a QR code
-        # print the data
-        
-                
-        if sample_ids != () and sample_ids != (None,):
-            self.log.info(f"QRCode data: {sample_ids[0]}")
-            return sample_ids[0]
-        
-        #try decoding inverted image
-        inv_img = cv2.bitwise_not(img)
-        #cv2.imwrite(filename, inv_img)
-        self.log.info("try decoding inverted image")
-        sample_ids = self.qreader.detect_and_decode(image=inv_img)
-        
-        # if there is a QR code
-        # print the data
-        if sample_ids != ():
-            self.log.info(f"QRCode data: {sample_ids[0]}")
-            return sample_ids[0]
-            
-        self.log.error("No QR code found") 
-        return None
     
+    async def decode_qr(self, img, slot_nr:int):
+    
+        inv_img = cv2.bitwise_not(img)      
+
+        print('creating task for normal image:')
+        task_normal = asyncio.create_task(
+            asyncio.to_thread(decode_img,img)
+        )
+        
+        print('creating task for inverted image:')
+        task_inverted = asyncio.create_task(
+            asyncio.to_thread(decode_img,inv_img)
+        )
+        
+        await asyncio.wait([task_normal,task_inverted], return_when=asyncio.FIRST_COMPLETED)
+        
+        if task_normal.done() and task_normal.result():
+            self.log(f"Decoded QR code in slot {slot_nr}: {task_normal.result()}")
+            self.qr_code_callback(slot_nr -1 ,task_normal.result()) 
+
+        if task_inverted.done() and task_inverted.result():
+            self.log(f"Decoded QR code in slot {slot_nr}: {task_inverted.result()}")
+            self.qr_code_callback(slot_nr -1 ,task_inverted.result()) 
+        
+        task_inverted.cancel()
+        task_normal.cancel()
+
     def grab_img(self,i=0):
         if self.camera is None:
             return None
@@ -143,6 +156,7 @@ class RobotServer:
                         else:
                             self.samplechanger_sm.next_slot()
                     case ['QR', slot_nr]:
+                        slot_nr = int(slot_nr)
                         if self.samplechanger_sm.current_state == SamplechangerSM.moving_to_scan_pos:
                             self.samplechanger_sm.at_scan_pos()
                             self.log.info(f'Camera at QR code: {slot_nr}')
@@ -150,14 +164,11 @@ class RobotServer:
                             #await asyncio.sleep(0.5)
                             
                             if self.camera != None:
-                                img = self.grab_img(int(slot_nr))
-                                qr_data = self.decode_img(img,int(slot_nr))
-                                
-                                if qr_data is not None:
-                                    self.qr_code_callback(int(slot_nr) -1 ,qr_data)                        
+                                img = self.grab_img(slot_nr)
+                                await self.decode_qr(img,slot_nr)                            
                                 
                 
-                            if int(slot_nr) == nsamples:
+                            if slot_nr == nsamples:
                                 self.samplechanger_sm.finished_scanning()
                             else:
                                 self.samplechanger_sm.next_slot()
@@ -168,15 +179,9 @@ class RobotServer:
                             #await asyncio.sleep(0.5)
                             
                             if self.camera != None:
-                                img = self.grab_img(int(slot_nr))
-                                qr_data = self.decode_img(img,int(slot_nr))
+                                img = self.grab_img(slot_nr)
+                                await self.decode_qr(img,slot_nr)
                                 
-                                
-                                #TODO check if QR code is different to the one in storage!!!
-                                self.log.info(f'QR code: {qr_data} at slot {slot_nr}')                  
-
-                
-
                             
                     case ['GET x']:
                         response = "x 1\n"

@@ -137,7 +137,7 @@ class Storage(HasIO,Readable):
             ('ok','unload_mounted',self.unload_ok_callback),
             ('error','unload',self.unload_error_callback),
             ('error','unload_mounted',self.unload_error_callback),
-            ('ok','scan_samples',self.scan_ok_callback)
+            ('ok','scan_samples',self.scan_ok_callback),
             ('ok','scan_samples_mounted',self.scan_ok_callback),
             ('error','scan_samples',self.scan_error_callback),
             ('error','scan_samples_mounted',self.scan_error_callback),
@@ -150,6 +150,9 @@ class Storage(HasIO,Readable):
         
     def read_status(self):
         robo_state = self.a_hardware.sm.current_state
+        
+        if self.a_hardware.status[0] == LOCAL_CONTROL:
+            return self.a_hardware.status
         
         if robo_state in  [SamplechangerSM.home,SamplechangerSM.home_mounted]:
             return IDLE, "ready for commamnds"
@@ -180,9 +183,9 @@ class Storage(HasIO,Readable):
             self.mag.samples[slot] = ""
 
         
-        if detected == 1 and self.samples[slot] == "":
+        if detected == 1 and self.mag.samples[slot] == "":
 
-            self.samples[slot] = "@" + str(slot)
+            self.mag.samples[slot] = "@" + str(slot)
         
     
     

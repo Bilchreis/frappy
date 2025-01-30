@@ -192,6 +192,10 @@ class Special_Position(HasIO,Drivable):
     def read_status(self):
             robo_state = self.a_hardware.sm.current_state
             
+            if self.a_hardware.status[0] == LOCAL_CONTROL:
+                return self.a_hardware.status
+        
+            
             
             if robo_state in [SamplechangerSM.mounting]:
                 return MOUNTING , "Mounting Sample"
@@ -248,3 +252,4 @@ UNMOUNTING       = Special_Position.Status.UNMOUNTING
 HOLDING_SAMPLE   = Special_Position.Status.HOLDING_SAMPLE
 PAUSED_SAMPLE    = Special_Position.Status.PAUSED
 STOPPED_SAMPLE   = Special_Position.Status.STOPPED
+LOCAL_CONTROL    = Special_Position.Status.LOCAL_CONTROL 

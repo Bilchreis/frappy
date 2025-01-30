@@ -48,6 +48,10 @@ class RobotIO(StringIO):
     
     default_settings = {'port': 29999}
     wait_before = 0.05
+    
+    
+
+        
 
 
 class hardware(HasIO,Readable):    
@@ -60,7 +64,7 @@ class hardware(HasIO,Readable):
             ('error', 'run_program',self.run_program_error_callback)
         ]
         self.robo_server = RobotServer(self.sm,self.callbacks,logger=self.log)  
-        
+
 
     
     ioClass = RobotIO
@@ -165,7 +169,11 @@ class hardware(HasIO,Readable):
         self.read_status()
 
 
-
+    def reconnect_communicator(self):
+        """reconnects to Robot"""
+        self.io.closeConnection()
+        
+        self.io.connectStart()
   
 
 
@@ -173,7 +181,15 @@ class hardware(HasIO,Readable):
         remote_control =  str(self.communicate('is in remote control'))
         
         if remote_control == 'true':
+            if not self.is_in_remote_control:
+                self.reconnect_communicator()
+        
+            self.is_in_remote_control = True
             return True
+        
+        
+        
+        self.is_in_remote_control = False
         return False
 
     def read_safetystatus(self):
@@ -337,7 +353,7 @@ class hardware(HasIO,Readable):
             raise IsErrorError('Robots is locked due to a safety related problem (' + str(self.safetystatus.name) + ") Please refer to instructions on the controller tablet or try 'clear_error' command.")
             
         
-        if not self.is_in_remote_control:
+        if not self.read_is_in_remote_control():
             raise ImpossibleError('Robot arm is in local control mode, please switch to remote control mode on the Robot controller tablet')
         
         if self.status[0] == BUSY or self.status[0] == PREPARING:
