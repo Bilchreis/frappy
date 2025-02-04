@@ -13,6 +13,9 @@ from frappy_HZB.samplechanger_sm import SamplechangerSM
 from frappy_HZB.robot_server import RobotServer
 from frappy.lib import clamp, mkthread
 
+
+import time
+
 ROBOT_MODE_ENUM = {
     'NO_CONTROLLER'  :0,
     'DISCONNECTED'   :1,
@@ -63,7 +66,8 @@ class hardware(HasIO,Readable):
             ('ok','run_program',self.run_program_ok_callback),
             ('error', 'run_program',self.run_program_error_callback)
         ]
-        self.robo_server = RobotServer(self.sm,self.callbacks,logger=self.log)  
+        self.robo_server = RobotServer(self.sm,self.callbacks,logger=self.log)
+        self.sm.set_wait_idle_callback(self.wait_idle_cb)  
 
 
     
@@ -161,7 +165,19 @@ class hardware(HasIO,Readable):
                                      default = False,
                                      group = 'Status Info')
        
-    
+    def wait_idle_cb(self):
+
+        timeout = time.time() + 5   # 5 Second Timeout
+        while self._program_running():
+            if time.time() > timeout:
+                raise Exception("timeout")
+            time.sleep(0.2)
+            
+                    
+        self.read_status()
+            
+        
+
        
     
     def doPoll(self):
@@ -357,7 +373,10 @@ class hardware(HasIO,Readable):
             raise ImpossibleError('Robot arm is in local control mode, please switch to remote control mode on the Robot controller tablet')
         
         if self.status[0] == BUSY or self.status[0] == PREPARING:
-            raise IsBusyError('Robot is already executing another program')
+            if not self._program_running() and self.sm.current_state == SamplechangerSM.home_switch:
+                pass
+            else:
+                raise IsBusyError('Robot is already executing another program')
         
         if self.status[0] >= 400 and self.status[0] != STOPPED:
             raise IsErrorError("Robot is in an error state. program '"+program_name+ "' cannot be exectuted")

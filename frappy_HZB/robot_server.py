@@ -95,11 +95,11 @@ class RobotServer:
         await asyncio.wait([task_normal,task_inverted], return_when=asyncio.FIRST_COMPLETED)
         
         if task_normal.done() and task_normal.result():
-            self.log(f"Decoded QR code in slot {slot_nr}: {task_normal.result()}")
+            self.log.info(f"Decoded QR code in slot {slot_nr}: {task_normal.result()}")
             self.qr_code_callback(slot_nr -1 ,task_normal.result()) 
 
         if task_inverted.done() and task_inverted.result():
-            self.log(f"Decoded QR code in slot {slot_nr}: {task_inverted.result()}")
+            self.log.info(f"Decoded QR code in slot {slot_nr}: {task_inverted.result()}")
             self.qr_code_callback(slot_nr -1 ,task_inverted.result()) 
         
         task_inverted.cancel()

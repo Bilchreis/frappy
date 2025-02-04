@@ -134,6 +134,9 @@ class SamplechangerSM(StateMachine):
 
     
     def on_enter_home_switch(self):
+        
+        self.wait_idle_callback()
+        
         self.special_pos_module._mount("mount",self.special_pos_module.next_sample)
         
     def on_transition(self, event_data, event: Event):
@@ -142,7 +145,9 @@ class SamplechangerSM(StateMachine):
         # binds the action to run for every transition instead of a specific event ID.
         print(f'State: {self.current_state.id} incoming Event: {event.id}' )
         
-    
+    def set_wait_idle_callback(self,callback):
+        self.wait_idle_callback = callback
+        
 
 #sm = SamplechangerSM()
 
