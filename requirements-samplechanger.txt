@@ -2,3 +2,23 @@ pypylon==4.1.0
 qreader==3.14
 opencv-python-headless == 4.11.0.86
 numpy == 2.1.3
+mlzlog
+PyQt5 >= 5.15.0
+pyqtgraph
+#--extra-index-url https://forge.frm2.tum.de/simple
+setuptools
+pyserial
+mlzlog >=0.2.0
+# daemonizing
+psutil
+python-daemon >=2.0
+# websocket interface:
+websockets>=11.0
+# for zmq interface
+#pyzmq>=13.1.0
+#for ppms on windows
+# don't forget to run
+#  'python Scripts/pywin32_postinstall.py -install'
+# from elevated prompt after install
+#pywin32
+python-statemachine == 2.5.0
