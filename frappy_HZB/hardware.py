@@ -353,16 +353,15 @@ class hardware(HasIO,Readable):
         if self.status[0] == STOPPED:
             raise ImpossibleError('module is already stopped')
 
+        if self._program_running():     
+            stop_reply  = str(self.communicate('stop'))
         
-     
-        stop_reply  = str(self.communicate('stop'))
-        
-        if stop_reply ==  'Stopped':
-            self.status = STOPPED, "Stopped execution"
+            if stop_reply ==  'Stopped':
+                self.status = STOPPED, "Stopped execution"
+                
             
-           
-        elif stop_reply == 'Failed to execute: stop':
-            raise InternalError("Failed to execute: stop")
+            elif stop_reply == 'Failed to execute: stop':
+                raise InternalError("Failed to execute: stop")
             
     def run_program(self,program_name,sm_event):
         if self.safetystatus > SAFETYSTATUS['REDUCED']:
