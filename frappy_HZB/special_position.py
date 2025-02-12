@@ -10,11 +10,13 @@ from frappy.errors import ImpossibleError, IsBusyError
 from frappy.lib.enum import Enum
 from frappy.modules import Attached
 
+from frappy_HZB.samplechanger_sm import SamplechangerSM
+
 nsamples = 12
 
 EMPTY_SLOT = ""
 
-from frappy_HZB.samplechanger_sm import SamplechangerSM
+
 
 
 
@@ -79,15 +81,25 @@ class Special_Position(HasIO,Drivable):
     def write_target(self,target):               
 
         
-        print(f"target: {target}, type: {type(target)}")
+
         
         if not target:      
             ### Unmount:
             return self._unmount("unmount")
         else:                   
            ### Mount: 
-           #TODO Sample switch
-            return self._mount("mount",target)
+            if target == self.value:
+               return target
+           
+            # just mount the desired Sample
+            if self.a_hardware.sm.current_state == SamplechangerSM.home:
+                return self._mount("mount",target)
+        
+           # unmount current sample and set target as nex sample to be mounted
+            self.next_sample = target        
+  
+            if self.a_hardware.sm.current_state == SamplechangerSM.home_mounted:
+                self._unmount("mount")
     
     def mount_error_callback(self,error_message= None):
         self.a_hardware.error_occured(error_message)
@@ -146,6 +158,8 @@ class Special_Position(HasIO,Drivable):
 
         
         self.read_status()
+        
+        self.a_storage.mag.refresh_on_mount(target)
         
         return self.target
      

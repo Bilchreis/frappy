@@ -81,6 +81,8 @@ class RobotServer:
     async def decode_qr(self, img, slot_nr:int):
     
         inv_img = cv2.bitwise_not(img)      
+        
+        cv2.imwrite(f'saved_qr_img_{slot_nr}.png',img=img)
 
         print('creating task for normal image:')
         task_normal = asyncio.create_task(

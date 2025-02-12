@@ -23,6 +23,7 @@ class Magazin:
     def __init__(self,nSamples):
         self.samples = [""] * nSamples
         self._next_sample_gen = self.next_sample_generator()
+        self.generator_index = 0
           
     def get_freeSlot(self):
         return self.get_index("")
@@ -70,17 +71,21 @@ class Magazin:
             yield None
             
 
-        index = 0
+        self.generator_index = 0
         while True:
-            if self.samples[index] != EMPTY_SLOT:
-                yield self.samples[index]
-            index = (index + 1) % n_samples
+            if self.samples[self.generator_index] != EMPTY_SLOT:
+                yield self.samples[self.generator_index]
+            self.generator_index = (self.generator_index + 1) % n_samples
 
     def get_next_sample(self):
         """
         Method to return the next non-empty sample using the generator.
         """
         return next(self._next_sample_gen)
+    
+    def refresh_on_mount(self,target):
+        self.generator_index = self.get_index(target)
+        self.get_next_sample()
 
             
             
