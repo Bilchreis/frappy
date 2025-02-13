@@ -83,9 +83,8 @@ class Magazin:
         """
         return next(self._next_sample_gen)
     
-    def refresh_on_mount(self,target):
+    def set_generator_index(self,target):
         self.generator_index = self.get_index(target)
-
 
             
             

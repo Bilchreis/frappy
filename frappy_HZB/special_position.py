@@ -159,7 +159,17 @@ class Special_Position(HasIO,Drivable):
         
         self.read_status()
         
-        self.a_storage.mag.refresh_on_mount(target)
+        self.a_storage.mag.set_generator_index(target)
+        
+        next_sample = self.a_storage.mag.get_next_sample()
+
+        
+        if next_sample == None:
+            raise ImpossibleError('Storage is empty, cannot mount next sample')
+        
+        self.next_sample = next_sample
+        
+        
         
         return self.target
      
@@ -233,16 +243,9 @@ class Special_Position(HasIO,Drivable):
     def next(self):
         """  (removes (if necessary) old sample and mounts next sample, same as setting 
         the target first to '' and then to 'sampleID')"""
-        next_sample = self.a_storage.mag.get_next_sample()
 
-        
-        if next_sample == None:
-            raise ImpossibleError('Storage is empty, cannot mount next sample')
-        
-        self.next_sample = next_sample
-        
         if self.a_hardware.sm.current_state == SamplechangerSM.home:
-            self._mount("mount",next_sample)
+            self._mount("mount",self.next_sample)
         
         
         if self.a_hardware.sm.current_state == SamplechangerSM.home_mounted:
