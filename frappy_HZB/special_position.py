@@ -245,6 +245,9 @@ class Special_Position(HasIO,Drivable):
         the target first to '' and then to 'sampleID')"""
 
         if self.a_hardware.sm.current_state == SamplechangerSM.home:
+            if self.next_sample == '':
+                        self.next_sample = self.a_storage.mag.get_next_sample()
+                
             self._mount("mount",self.next_sample)
         
         

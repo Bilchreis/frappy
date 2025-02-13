@@ -71,7 +71,8 @@ class Magazin:
             yield None
             
 
-        self.generator_index = 0
+
+        
         while True:
             if self.samples[self.generator_index] != EMPTY_SLOT:
                 yield self.samples[self.generator_index]
