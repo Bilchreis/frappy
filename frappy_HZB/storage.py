@@ -85,7 +85,7 @@ class Magazin:
     
     def refresh_on_mount(self,target):
         self.generator_index = self.get_index(target)
-        self.get_next_sample()
+
 
             
             
