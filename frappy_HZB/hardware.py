@@ -46,17 +46,6 @@ SAFETYSTATUS = {
 
 
 
-
-class RobotIO(StringIO):
-    
-    default_settings = {'port': 29999}
-    wait_before = 0.05
-    
-    
-
-        
-
-
 class hardware(HasIO,Readable):    
     
     def __init__(self,*args,**kwargs):
@@ -71,8 +60,7 @@ class hardware(HasIO,Readable):
 
 
     
-    ioClass = RobotIO
-    
+
     Status = Enum( 
         Readable.Status,
         DISABLED = StatusType.DISABLED,
@@ -185,36 +173,13 @@ class hardware(HasIO,Readable):
         self.read_status()
 
 
-    def reconnect_communicator(self):
-        """reconnects to Robot"""
-        self.io.closeConnection()
-        
-        self.io.connectStart()
+
   
 
 
-    def read_is_in_remote_control(self):
-        remote_control =  str(self.communicate('is in remote control'))
-        
-        if remote_control == 'true':
-            if not self.is_in_remote_control:
-                self.reconnect_communicator()
-        
-            self.is_in_remote_control = True
-            return True
-        
-        
-        
-        self.is_in_remote_control = False
-        return False
 
     def read_safetystatus(self):
-        safety_stat = str(self.communicate('safetystatus')).removeprefix("Safetystatus: ")
-
-        if safety_stat in SAFETYSTATUS:
-            return safety_stat
-
-        raise ReadFailedError("Unknown safetytatus:" + safety_stat)
+        return 'NORMAL'
 
    
     
@@ -246,29 +211,21 @@ class hardware(HasIO,Readable):
 
 
     def read_model(self):
-        return str(self.communicate('get robot model'))
+        return "UR5"
 
     def read_serial(self):
-        return str(self.communicate('get serial number'))
+        return "I_AM_A_SERIAL_NUMBER"
     
 
     def read_ur_version(self):
-        return str(self.communicate('version'))
+        return "V212323243"
     
     def read_robotmode(self):
-        robo_mode =  str(self.communicate('robotmode')).removeprefix('Robotmode: ')
-    
-        if robo_mode in ROBOT_MODE_ENUM:
-            return robo_mode
-
-        raise ReadFailedError("Unknown robot mode:" + robo_mode)
+        "IDLE"
     
     def read_powerstate(self):
-        self.read_robotmode()
-        if self.robotmode.value > 4:
-            return 'POWER_ON' 
-        else:
-            return 'POWER_OFF'
+        return 'POWER_ON' 
+
     
     
     def write_powerstate(self,powerstate):

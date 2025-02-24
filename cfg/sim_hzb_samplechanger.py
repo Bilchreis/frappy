@@ -2,8 +2,8 @@ nsamples = 12
 
 Node('sample_changer.HZB',  # a globally unique identification
      'Sample Changer\n\nThis is an demo for a  SECoP (Sample Environment Communication Protocol) sample changer SEC-Node.',  # describes the node
-      'tcp://10803',
-      implementor = 'Peter Wegmann')  # you might choose any port number > 1024
+      'tcp://10804',
+      implementor = 'Peter Braun')  # you might choose any port number > 1024
 
  
     
