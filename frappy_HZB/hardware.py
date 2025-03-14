@@ -183,25 +183,9 @@ class hardware(HasIO,Readable):
 
    
     
-    
-    def _run_loaded_program(self):
-        play_reply  = str(self.communicate('play'))
-        
 
-        
-        if play_reply == 'Starting program':
-            self.status = BUSY, "Starting program"
-        else:
-            raise InternalError("Failed to execute: play")
-        
-    
     def read_loaded_prog(self):
-        loaded_prog_reply =  str(self.communicate('get loaded program'))
-
-        if loaded_prog_reply == 'No program loaded':
-            return 'no_program_loaded'
-        else:
-            return re.search(r'([^\/]+.urp)',loaded_prog_reply).group()
+        return self.loaded_prog
 
         
     
@@ -242,31 +226,14 @@ class hardware(HasIO,Readable):
         return powerstate.name
 
     
-    def read_status(self):
-    
-        if not self.read_is_in_remote_control():
-            return LOCAL_CONTROL, "Robot is in 'local control' mode"
-
-        self.read_safetystatus()
-        if  self.safetystatus > 1:
-            return LOCKED, str(self.safetystatus.name)
-        
-        
-               
+    def read_status(self):               
        
         if self.status[0] == STOPPED:
             return self.status
                 
         if self.status[0] == ERROR:
             return self.status
-        
-        if self.status[0] == UNKNOWN:
-            return self.status
-        
-        if self._program_running():
-            return BUSY, f'Robot is running program. Robot State: {self.sm.current_state.name}'
-        
-        
+
         if self.sm.current_state == SamplechangerSM.home or self.sm.current_state == SamplechangerSM.home_mounted:
             return IDLE, 'Robot is at home position'
         else:
@@ -278,28 +245,18 @@ class hardware(HasIO,Readable):
 
 
     def read_program_running(self):
-        running = self._program_running()
+        running = True
         
-        if self.was_running and  (running == False):
-            self.read_status()
-            
+        if self.sm.current_state == SamplechangerSM.home or self.sm.current_state == SamplechangerSM.home_mounted:
+            running = False
+
         
         self.was_running = running
         
         
-        
-        
         return running 
 
-    def _program_running(self): 
-        running_reply = str(self.communicate('running')).removeprefix('Program running: ') 
-        
-        if running_reply == 'true':
-            return True
-        
-        return False
-    
-   
+  
 
 
     @Command(group ='control')
@@ -310,24 +267,12 @@ class hardware(HasIO,Readable):
         if self.status[0] == STOPPED:
             raise ImpossibleError('module is already stopped')
 
-        if self._program_running():     
-            stop_reply  = str(self.communicate('stop'))
-        
-            if stop_reply ==  'Stopped':
-                self.status = STOPPED, "Stopped execution"
+        if self._program_running():  
+            self.status = STOPPED, "Stopped execution"
                 
-            
-            elif stop_reply == 'Failed to execute: stop':
-                raise InternalError("Failed to execute: stop")
-            
+
     def run_program(self,program_name,sm_event):
-        if self.safetystatus > SAFETYSTATUS['REDUCED']:
-            raise IsErrorError('Robots is locked due to a safety related problem (' + str(self.safetystatus.name) + ") Please refer to instructions on the controller tablet or try 'clear_error' command.")
-            
-        
-        if not self.read_is_in_remote_control():
-            raise ImpossibleError('Robot arm is in local control mode, please switch to remote control mode on the Robot controller tablet')
-        
+
         if self.status[0] == BUSY or self.status[0] == PREPARING:
             if not self._program_running() and self.sm.current_state == SamplechangerSM.home_switch:
                 pass
@@ -337,24 +282,11 @@ class hardware(HasIO,Readable):
         if self.status[0] >= 400 and self.status[0] != STOPPED:
             raise IsErrorError("Robot is in an error state. program '"+program_name+ "' cannot be exectuted")
         
-        load_reply = str(self.communicate(f'load {program_name}'))
-              
         
-        if re.match(r'Loading program: .*%s' % program_name,load_reply):
-            self._run_loaded_program()
-            self.value = program_name
-            
-           
-        elif re.match(r'File not found: .*%s' % program_name,load_reply):
-            raise InternalError('Program not found: '+program_name)
+        self.loaded_prog = program_name
         
-        elif re.match(r'Error while loading program: .*%s' % program_name,load_reply):
-            raise InternalError('write_target ERROR while loading program: '+ program_name)
-            
-        else:
-            self.status = ERROR, 'unknown answer: '+ load_reply 
-            raise InternalError('unknown answer: '+load_reply)
-        
+        self.status = BUSY, "Starting program"      
+
         self.sm.send(sm_event)
     
 

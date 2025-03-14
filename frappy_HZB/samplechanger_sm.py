@@ -149,8 +149,8 @@ class SamplechangerSM(StateMachine):
         self.wait_idle_callback = callback
         
 
-sm = SamplechangerSM()
+#sm = SamplechangerSM()
 
 
 
-sm._graph().write_png('samplechanger.png')
+#sm._graph().write_png('samplechanger.png')
